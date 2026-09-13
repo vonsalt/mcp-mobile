@@ -1,5 +1,7 @@
 # Claude Code (CLI) Setup
 
+> This guide configures a **local stdio** MCP server for Claude Code. For a public HTTPS server used in Claude's remote connector interface, use the [Claude Remote Connector Guide](claude-connector.md).
+
 ## 1. Add the MCP server
 
 Run this command in your terminal:

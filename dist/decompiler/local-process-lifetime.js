@@ -14,8 +14,8 @@ export const LOCAL_PROCESS_LIFETIME_PATHS = {
 export const DEFAULT_TERMINATION_POLICY = {
     zeroLeaseGraceMs: 250,
     registrationIntentQuietMs: 100,
-    graceMs: 1_000,
-    forceWaitMs: 1_000,
+    graceMs: 1000,
+    forceWaitMs: 1000,
     pollMs: 50,
 };
 let registered = false;
@@ -187,9 +187,6 @@ export function registerLocalDecompilerLifetime() {
         console.error("[Decompiler] Could not establish this MCP process identity; local providers will not be started as managed processes.");
         return;
     }
-    // Start time is the stable identity for the MCP process. Its argv may retain
-    // a relative `dist/index.js` path under `npm start`, so it must not be used
-    // as the lease's liveness token.
     if (!acquireProcessLease(process.pid, ""))
         return;
     registered = true;
@@ -260,7 +257,7 @@ export function trackLocalDecompilerProcess(provider, pid, binaryPath, options =
         };
         watchdog.once("error", watchdogFailed);
         watchdog.once("exit", watchdogExited);
-        const supervisionDeadline = Date.now() + 2_000;
+        const supervisionDeadline = Date.now() + 2000;
         supervisionTimer = setInterval(() => {
             if (readyPath && fs.existsSync(readyPath)) {
                 clearInterval(supervisionTimer);

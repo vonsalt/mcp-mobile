@@ -114,6 +114,16 @@ function getAutoexecCandidates() {
         name: "Opiumware",
         folder: path.join(os.homedir(), "Documents", "Opiumware Workspace", "autoexec"),
       },
+      {
+        id: "scriptware-autoexec",
+        name: "Scriptware",
+        folder: path.join(os.homedir(), "Documents", "Scriptware", "autoexec"),
+      },
+      {
+        id: "valyria-autoexec",
+        name: "Valyria",
+        folder: path.join(os.homedir(), "Documents", "Valyria", "autoexec"),
+      },
     ];
   }
 
@@ -160,6 +170,51 @@ function getAutoexecCandidates() {
         id: "synapse-z-autoexec",
         name: "Synapse Z",
         folder: path.join(localAppData, "Synapse Z", "autoexec"),
+      },
+      {
+        id: "swift-autoexec",
+        name: "Swift",
+        folder: path.join(localAppData, "Swift", "autoexec"),
+      },
+      {
+        id: "ronix-autoexec",
+        name: "Ronix",
+        folder: path.join(localAppData, "Ronix", "autoexec"),
+      },
+      {
+        id: "hydrogen-autoexec",
+        name: "Hydrogen",
+        folder: path.join(localAppData, "Hydrogen", "autoexec"),
+      },
+      {
+        id: "delta-autoexec",
+        name: "Delta",
+        folder: path.join(localAppData, "Delta", "autoexec"),
+      },
+      {
+        id: "codex-autoexec",
+        name: "CodeX",
+        folder: path.join(localAppData, "CodeX", "autoexec"),
+      },
+      {
+        id: "arceusx-autoexec",
+        name: "ArceusX",
+        folder: path.join(localAppData, "ArceusX", "autoexec"),
+      },
+      {
+        id: "vegax-autoexec",
+        name: "VegaX",
+        folder: path.join(localAppData, "VegaX", "autoexec"),
+      },
+      {
+        id: "cryptic-autoexec",
+        name: "Cryptic",
+        folder: path.join(localAppData, "Cryptic", "autoexec"),
+      },
+      {
+        id: "eclipse-autoexec",
+        name: "Eclipse",
+        folder: path.join(localAppData, "Eclipse", "autoexec"),
       },
     ];
 

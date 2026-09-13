@@ -91,7 +91,6 @@ function terminateProcessTree(pid, force) {
             process.kill(pid, signal);
         }
         catch {
-            // The owned process already stopped.
         }
     }
 }

@@ -85,22 +85,55 @@ local VirtualInputManager = context.VirtualInputManager
 
         assert(typeof(button) == "Instance", "Path did not resolve to a valid Instance.")
         assert(button:IsA("GuiButton"), "Resolved Instance is not a GuiButton (e.g., TextButton or ImageButton).")
-        assert(typeof(firesignal) == "function", "Your executor does not support 'firesignal', which is required for this command.")
 
         local Signals = {"Activated", "MouseButton1Down", "MouseButton2Down", "MouseButton1Click", "MouseButton2Click"}
-        
+        local method = "unknown"
+
         if action then
             assert(table.find(Signals, action), "Invalid action provided. Valid actions are: " .. table.concat(Signals, ", "))
-            firesignal(button[action])
+        end
+
+        if type(firesignal) == "function" then
+            method = "firesignal"
+            if action then
+                firesignal(button[action])
+            else
+                for _, signalName in pairs(Signals) do
+                    pcall(function() firesignal(button[signalName]) end)
+                end
+            end
+        elseif button.Activate and type(button.Activate) == "function" then
+            method = "Activate"
+            pcall(function() button:Activate() end)
         else
-            for _, signalName in pairs(Signals) do
-                pcall(function() firesignal(button[signalName]) end)
+            method = "VirtualInputManager"
+            local success, err = pcall(function()
+                local absPos = button.AbsolutePosition
+                local absSize = button.AbsoluteSize
+                if absPos and absSize then
+                    local centerX = absPos.X + absSize.X / 2
+                    local centerY = absPos.Y + absSize.Y / 2
+                    pcall(function()
+                        VirtualInputManager:SendMouseButton(true, Enum.UserInputType.MouseButton1, Vector2.new(centerX, centerY), 0, game)
+                        task.wait(0.05)
+                        VirtualInputManager:SendMouseButton(false, Enum.UserInputType.MouseButton1, Vector2.new(centerX, centerY), 0, game)
+                    end)
+                    pcall(function()
+                        VirtualInputManager:SendTouchEvent(true, Vector2.new(centerX, centerY), 0, game)
+                        task.wait(0.05)
+                        VirtualInputManager:SendTouchEvent(false, Vector2.new(centerX, centerY), 0, game)
+                    end)
+                end
+            end)
+            if not success then
+                error("Failed to click button: " .. tostring(err))
             end
         end
 
         return {
             status = "success",
-            message = "Successfully fired click signals on Button."
+            message = "Successfully clicked Button using method: " .. method,
+            method = method
         }
     end)
 end

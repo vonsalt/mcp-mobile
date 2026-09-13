@@ -15,7 +15,7 @@ function lockOwnerIsLive(owner) {
 export function withLifetimeLock(paths, callback) {
     const lockPath = lifetimeLockPath(paths);
     fs.mkdirSync(path.dirname(lockPath), { recursive: true });
-    const deadline = Date.now() + 15_000;
+    const deadline = Date.now() + 15000;
     const nonce = randomUUID();
     while (true) {
         let descriptor;
@@ -29,11 +29,11 @@ export function withLifetimeLock(paths, callback) {
             try {
                 const owner = JSON.parse(fs.readFileSync(lockPath, "utf8"));
                 const ageMs = Date.now() - fs.statSync(lockPath).mtimeMs;
-                stale = ageMs > 5_000 && !lockOwnerIsLive(owner);
+                stale = ageMs > 5000 && !lockOwnerIsLive(owner);
             }
             catch {
                 try {
-                    stale = Date.now() - fs.statSync(lockPath).mtimeMs > 5_000;
+                    stale = Date.now() - fs.statSync(lockPath).mtimeMs > 5000;
                 }
                 catch {
                     stale = false;
@@ -65,7 +65,6 @@ export function withLifetimeLock(paths, callback) {
                 fs.closeSync(descriptor);
             }
             catch {
-                // The descriptor may already have been closed by a failed write.
             }
             fs.rmSync(lockPath, { force: true });
             throw error;
@@ -81,7 +80,6 @@ export function withLifetimeLock(paths, callback) {
                 fs.rmSync(lockPath, { force: true });
         }
         catch {
-            // A stale-lock recovery already removed it.
         }
     }
 }

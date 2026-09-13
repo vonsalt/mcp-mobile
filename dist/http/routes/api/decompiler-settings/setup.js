@@ -297,7 +297,6 @@ async function configuredEndpointForProvider(provider, requestEndpoint) {
             return settingsEndpoint;
     }
     catch {
-        // Fall through to the install manifest.
     }
     return normalizeSetupEndpoint((await readInstallRecord(provider))?.endpoint);
 }

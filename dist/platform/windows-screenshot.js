@@ -73,7 +73,7 @@ if ($found.Count -eq 0) {
         try {
             fs.unlinkSync(tmpFile);
         }
-        catch { /* ignore */ }
+        catch { }
     }
 }
 function captureWindowPNG(hwnd, maxWidth = DEFAULT_SCREENSHOT_MAX_WIDTH, jpegQuality = DEFAULT_SCREENSHOT_JPEG_QUALITY) {
@@ -165,11 +165,11 @@ Write-Output 'OK'
         try {
             fs.unlinkSync(tmpFile);
         }
-        catch { /* ignore */ }
+        catch { }
         try {
             fs.unlinkSync(outFile);
         }
-        catch { /* ignore */ }
+        catch { }
     }
 }
 export function performScreenshot(pid, maxWidth) {

@@ -173,6 +173,18 @@ local WebSocketBridge = setmetatable({}, {__index = BaseBridge}); do
                     continue
                 end
 
+                --// For WebSocket connections, rely on OnClose/OnError events \\--
+                -- instead of making HTTP requests every second.
+                -- The OnClose handler sets self.Connected = false, which exits this loop.
+                -- We also check if the socket object is still valid.
+                if self.WebSocket then
+                    -- If Connected is still true, the socket is alive.
+                    -- OnClose/OnError will set it to false.
+                    consecutiveFailures = 0
+                    continue
+                end
+
+                -- Fallback: HTTP liveness check for non-WS connections
                 if self:IsAlive() then
                     consecutiveFailures = 0
                     continue
@@ -211,7 +223,15 @@ local WebSocketBridge = setmetatable({}, {__index = BaseBridge}); do
         --// On Close \\--
         self.WebSocket.OnClose:Connect(function()
             self.Connected = false
+            -- The runtime loop will detect this via WaitForDisconnect and reconnect.
         end)
+    
+        --// On Error — treat as disconnect \\--
+        if self.WebSocket.OnError then
+            self.WebSocket.OnError:Connect(function()
+                self.Connected = false
+            end)
+        end
     
         return self
     end

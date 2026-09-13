@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { localProcessOperations, shutdownManagedProvidersIfNoLeases, } from "./local-process-lifetime.js";
 import { processSnapshotMatches } from "./local-process-operations.js";
-const POLL_INTERVAL_MS = 2_000;
+const POLL_INTERVAL_MS = 2000;
 function argument(name) {
     const index = process.argv.indexOf(name);
     return index >= 0 ? process.argv[index + 1] : undefined;

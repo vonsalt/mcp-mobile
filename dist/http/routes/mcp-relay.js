@@ -6,7 +6,6 @@ export function WS(ws) {
     ws.on("message", (rawData) => {
         try {
             const message = JSON.parse(rawData.toString());
-            // Relay-level request handled directly by the primary.
             if (message.type === "list-clients" && message.id) {
                 ws.send(JSON.stringify({
                     id: message.id,

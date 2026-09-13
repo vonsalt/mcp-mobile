@@ -1,11 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { DEEPSEEK_API_KEY, DEEPSEEK_MODEL } from "../../../config.js";
-
 export function GET(_req: IncomingMessage, res: ServerResponse): void {
-  const hasEnvKey = !!DEEPSEEK_API_KEY;
-  const defaultModel = DEEPSEEK_MODEL;
-
-  const html = `<!DOCTYPE html>
+    const hasEnvKey = !!DEEPSEEK_API_KEY;
+    const defaultModel = DEEPSEEK_MODEL;
+    const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -463,7 +461,6 @@ document.getElementById('msg-input').focus();
 </script>
 </body>
 </html>`;
-
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-  res.end(html);
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(html);
 }

@@ -1,9 +1,6 @@
 import { getMcpClient } from "./mcp-client.js";
-import { CUSTOM_AI_API_KEY, CUSTOM_AI_BASE_URL, CUSTOM_AI_API_VERSION, CUSTOM_AI_MODEL, CUSTOM_AI_MAX_TOKENS, CUSTOM_AI_THINKING_ENABLED, CUSTOM_AI_THINKING_BUDGET, } from "../config.js";
+import { CUSTOM_AI_API_KEY, CUSTOM_AI_BASE_URL, CUSTOM_AI_API_VERSION, CUSTOM_AI_MODEL, CUSTOM_AI_MAX_TOKENS, CUSTOM_AI_THINKING_ENABLED, CUSTOM_AI_THINKING_BUDGET, CUSTOM_AI_AUTH_TYPE, CUSTOM_AI_AUTH_HEADER, CUSTOM_AI_BEARER_TOKEN, } from "../config.js";
 const MAX_TOOL_ROUNDS = 10;
-/**
- * Fetch tool definitions from the MCP server and convert to Anthropic format.
- */
 async function getTools() {
     const client = getMcpClient();
     if (!client)
@@ -18,34 +15,34 @@ async function getTools() {
         },
     }));
 }
-/**
- * Execute a single tool call via the MCP client.
- */
 async function executeTool(name, input) {
     const client = getMcpClient();
     if (!client)
-        return "Error: MCP client not connected.";
+        return { textParts: ["Error: MCP client not connected."], imageBlocks: [], isError: true };
     try {
         const result = await client.callTool({ name, arguments: input });
-        if (result.isError) {
-            const texts = (result.content || [])
-                .filter((c) => c.type === "text")
-                .map((c) => c.text);
-            return `Tool error: ${texts.join("\n") || "Unknown error"}`;
+        const textParts = [];
+        const imageBlocks = [];
+        for (const block of (result.content || [])) {
+            if (block.type === "text" && block.text) {
+                textParts.push(block.text);
+            }
+            else if (block.type === "image" && block.data) {
+                imageBlocks.push({ data: block.data, mimeType: block.mimeType || "image/png" });
+            }
         }
-        const texts = (result.content || [])
-            .filter((c) => c.type === "text")
-            .map((c) => c.text);
-        return texts.join("\n") || "(no output)";
+        if (result.isError) {
+            return { textParts, imageBlocks, isError: true };
+        }
+        if (textParts.length === 0 && imageBlocks.length === 0) {
+            textParts.push("(no output)");
+        }
+        return { textParts, imageBlocks, isError: false };
     }
     catch (err) {
-        return `Tool execution failed: ${err.message || err}`;
+        return { textParts: [`Tool execution failed: ${err.message || err}`], imageBlocks: [], isError: true };
     }
 }
-/**
- * Build the messages endpoint URL from a base URL.
- * Handles bases that already include /v1 or not.
- */
 function buildMessagesUrl(baseUrl) {
     const base = baseUrl.replace(/\/+$/, "");
     if (base.endsWith("/v1")) {
@@ -56,17 +53,36 @@ function buildMessagesUrl(baseUrl) {
     }
     return base + "/v1/messages";
 }
-/**
- * Run the Anthropic-compatible agent loop.
- *
- * 1. Get MCP tools in Anthropic format
- * 2. Call the Messages API with messages + tools
- * 3. If the model returns tool_use blocks, execute them and loop
- * 4. Return final text + any thinking blocks + tool call info
- */
+function buildAuthHeaders(config) {
+    const authType = config.authType || CUSTOM_AI_AUTH_TYPE;
+    const authHeader = config.authHeader || CUSTOM_AI_AUTH_HEADER;
+    const bearerToken = config.bearerToken || CUSTOM_AI_BEARER_TOKEN;
+    const apiKey = config.apiKey || CUSTOM_AI_API_KEY;
+    const headers = {};
+    if (authHeader) {
+        const token = bearerToken || apiKey;
+        if (token)
+            headers[authHeader] = token;
+        return headers;
+    }
+    if (authType === "bearer") {
+        const token = bearerToken || apiKey;
+        if (token)
+            headers["Authorization"] = `Bearer ${token}`;
+        return headers;
+    }
+    if (apiKey) {
+        headers["x-api-key"] = apiKey;
+        headers["anthropic-version"] = config.apiVersion || CUSTOM_AI_API_VERSION;
+    }
+    return headers;
+}
 export async function runAgentLoop(messages, config = {}) {
     const apiKey = config.apiKey || CUSTOM_AI_API_KEY;
-    if (!apiKey) {
+    const bearerToken = config.bearerToken || CUSTOM_AI_BEARER_TOKEN;
+    const authType = config.authType || CUSTOM_AI_AUTH_TYPE;
+    const hasBearer = authType === "bearer" && (bearerToken || apiKey);
+    if (!apiKey && !hasBearer) {
         return {
             content: "",
             thinking: [],
@@ -86,7 +102,6 @@ export async function runAgentLoop(messages, config = {}) {
     const workingMessages = [...messages];
     const messagesUrl = buildMessagesUrl(baseUrl);
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        // Build request body
         const requestBody = {
             model,
             max_tokens: maxTokens,
@@ -95,21 +110,20 @@ export async function runAgentLoop(messages, config = {}) {
         if (tools.length > 0) {
             requestBody.tools = tools;
         }
-        // Extended thinking support
         if (thinkingEnabled) {
             requestBody.thinking = {
                 type: "enabled",
                 budget_tokens: Math.min(thinkingBudget, maxTokens - 1000),
             };
         }
+        const authHeaders = buildAuthHeaders(config);
         let data;
         try {
             const resp = await fetch(messagesUrl, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "x-api-key": apiKey,
-                    "anthropic-version": apiVersion,
+                    ...authHeaders,
                 },
                 body: JSON.stringify(requestBody),
             });
@@ -133,49 +147,49 @@ export async function runAgentLoop(messages, config = {}) {
             };
         }
         const contentBlocks = data.content || [];
-        // Extract thinking blocks
         for (const block of contentBlocks) {
             if (block.type === "thinking" && block.thinking) {
                 allThinking.push({ text: block.thinking });
             }
         }
-        // Check for tool_use blocks
         const toolUseBlocks = contentBlocks.filter((b) => b.type === "tool_use");
         if (toolUseBlocks.length > 0) {
-            // Add assistant message with all content blocks
             workingMessages.push({
                 role: "assistant",
                 content: contentBlocks,
             });
-            // Execute each tool call and build tool_result blocks
-            const toolResults = [];
+            const toolResultBlocks = [];
             for (const tu of toolUseBlocks) {
                 const toolName = tu.name || "";
                 const toolInput = tu.input || {};
                 const inputStr = JSON.stringify(toolInput);
-                const result = await executeTool(toolName, toolInput);
-                toolCallsMade.push({ name: toolName, input: inputStr, result });
-                toolResults.push({
-                    type: "tool_use", // will be converted below
-                    // We need to build a tool_result block
-                });
-            }
-            // Build proper tool_result content for the user message
-            const toolResultBlocks = toolUseBlocks.map((tu) => {
-                const tc = toolCallsMade.find((c) => c.name === tu.name && c.input === JSON.stringify(tu.input));
-                return {
+                const execResult = await executeTool(toolName, toolInput);
+                const resultText = execResult.textParts.join("\n");
+                toolCallsMade.push({ name: toolName, input: inputStr, result: resultText });
+                const resultContent = [{ type: "text", text: resultText }];
+                for (const img of execResult.imageBlocks) {
+                    resultContent.push({
+                        type: "image",
+                        source: {
+                            type: "base64",
+                            media_type: img.mimeType,
+                            data: img.data,
+                        },
+                    });
+                }
+                toolResultBlocks.push({
                     type: "tool_result",
                     tool_use_id: tu.id,
-                    content: tc?.result || "(no output)",
-                };
-            });
+                    content: resultContent,
+                    is_error: execResult.isError || undefined,
+                });
+            }
             workingMessages.push({
                 role: "user",
                 content: toolResultBlocks,
             });
             continue;
         }
-        // No tool calls — extract final text
         const textBlocks = contentBlocks.filter((b) => b.type === "text");
         const finalText = textBlocks.map((b) => b.text || "").join("\n");
         return {

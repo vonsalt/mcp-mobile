@@ -5,17 +5,20 @@ import { clearScriptSourceIndex } from "./script-source-store.js";
 import { clearDecompilerHealthForClient } from "../../../decompiler/health.js";
 const clientRegistry = new Map();
 const wsToClientId = new Map();
-const HTTP_CLIENT_RETENTION_MS = HTTP_POLL_TIMEOUT * 2;
+// A mobile executor can lose one or several long-poll responses while its app is
+// backgrounded or a carrier briefly changes networks. Keep the dashboard session
+// active through that short gap, and retain its telemetry longer for a clean rejoin.
+export const HTTP_CLIENT_ACTIVE_GRACE_MS = Math.max(HTTP_POLL_TIMEOUT * 4, 45_000);
+const HTTP_CLIENT_RETENTION_MS = Math.max(HTTP_CLIENT_ACTIVE_GRACE_MS * 4, 180_000);
 let activeClientId = undefined;
 let activeClientIsRemote = false;
 function isClientActive(entry) {
     if (entry.transport === "ws") {
         return Boolean(entry.ws && entry.ws.readyState === WebSocket.OPEN);
     }
-    // HTTP clients: active if recently polled OR currently long-polling
     if (entry.pendingPollResolve)
         return true;
-    return Date.now() - entry.lastHttpPoll < HTTP_POLL_TIMEOUT;
+    return Date.now() - entry.lastHttpPoll < HTTP_CLIENT_ACTIVE_GRACE_MS;
 }
 function removeClient(clientId, reason) {
     const entry = clientRegistry.get(clientId);
@@ -85,15 +88,21 @@ export function resetRegistry() {
     activeClientIsRemote = false;
 }
 export function registerClient(info) {
+    const now = Date.now();
     const existing = info.sessionId ? findClientBySessionId(info.sessionId) : undefined;
     if (existing) {
+        const sessionChanged = existing.placeId !== info.placeId || existing.jobId !== info.jobId;
+        const previousSession = {
+            placeId: existing.placeId,
+            jobId: existing.jobId,
+            placeName: existing.placeName,
+        };
         if (existing.ws && existing.ws !== info.ws) {
             wsToClientId.delete(existing.ws);
             try {
                 existing.ws.close();
             }
             catch {
-                // Best effort cleanup; the new transport below is authoritative.
             }
         }
         existing.pendingPollResolve?.([]);
@@ -105,12 +114,32 @@ export function registerClient(info) {
         existing.sessionId = info.sessionId;
         existing.transport = info.transport;
         existing.ws = info.ws;
-        existing.lastHttpPoll = Date.now();
+        existing.lastRegistrationAt = now;
+        existing.lastHttpPoll = now;
+        existing.registrationCount += 1;
+        existing.reconnectCount += 1;
         existing.pendingPollResolve = null;
         existing.mobile = info.mobile ?? existing.mobile;
         existing.executor = info.executor ?? existing.executor;
         existing.platform = info.platform ?? existing.platform;
         existing.capabilities = info.capabilities ?? existing.capabilities;
+        if (sessionChanged) {
+            const alert = {
+                type: "session-change",
+                detectedAt: now,
+                previousPlaceId: previousSession.placeId,
+                previousJobId: previousSession.jobId,
+                previousPlaceName: previousSession.placeName,
+                currentPlaceId: info.placeId,
+                currentJobId: info.jobId,
+                currentPlaceName: info.placeName,
+            };
+            existing.sessionChangeCount += 1;
+            existing.sessionAlerts.push(alert);
+            if (existing.sessionAlerts.length > 12)
+                existing.sessionAlerts.shift();
+            console.error(`[Registry] Session change detected for ${existing.clientId}: ${previousSession.jobId} -> ${info.jobId}`);
+        }
         if (info.ws) {
             wsToClientId.set(info.ws, existing.clientId);
         }
@@ -128,7 +157,13 @@ export function registerClient(info) {
         placeName: info.placeName,
         transport: info.transport,
         ws: info.ws,
-        lastHttpPoll: Date.now(),
+        connectedAt: now,
+        lastRegistrationAt: now,
+        lastHttpPoll: now,
+        registrationCount: 1,
+        reconnectCount: 0,
+        sessionChangeCount: 0,
+        sessionAlerts: [],
         pendingHttpCommands: [],
         pendingPollResolve: null,
         mobile: info.mobile,
@@ -149,6 +184,21 @@ export function unregisterClient(clientId) {
 export function getClientById(clientId) {
     return clientRegistry.get(clientId);
 }
+export function getClientMonitoring(client, now = Date.now()) {
+    const lastSeenAt = Math.max(client.lastRegistrationAt, client.lastHttpPoll);
+    return {
+        connectedAt: client.connectedAt,
+        lastRegistrationAt: client.lastRegistrationAt,
+        lastSeenAt,
+        sessionUptimeMs: Math.max(0, now - client.connectedAt),
+        idleMs: Math.max(0, now - lastSeenAt),
+        registrationCount: client.registrationCount,
+        reconnectCount: client.reconnectCount,
+        sessionChangeCount: client.sessionChangeCount,
+        currentSessionActive: isClientActive(client),
+        sessionAlerts: [...client.sessionAlerts],
+    };
+}
 export function getClientIdByWs(ws) {
     return wsToClientId.get(ws);
 }
@@ -166,7 +216,6 @@ export function formatActiveClientListForTool() {
     if (active.length === 0) {
         return "No Roblox clients are currently connected.";
     }
-    // Compact one-line-per-client format to minimize tokens vs pretty JSON.
     const selectedClientId = getActiveClientId();
     return active
         .map((c) => {

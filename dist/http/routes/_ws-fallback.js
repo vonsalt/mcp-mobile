@@ -1,5 +1,5 @@
 import { handleRobloxResponse } from "../../bridge/handlers/shared/communication.js";
-import { getClientIdByWs, registerClient, unregisterClient, } from "../../bridge/handlers/shared/registry.js";
+import { getClientIdByWs, registerClient, unregisterClient, getClientById, } from "../../bridge/handlers/shared/registry.js";
 export function WS(ws) {
     console.error("[Primary] Roblox client connected via WebSocket (awaiting registration).");
     ws.on("message", (rawData) => {
@@ -30,10 +30,36 @@ export function WS(ws) {
             console.error("[Primary] Error parsing Roblox WS message:", e);
         }
     });
+    ws.on("error", (err) => {
+        console.error("[Primary] WebSocket error:", err.message || err);
+    });
     ws.on("close", () => {
         const clientId = getClientIdByWs(ws);
-        if (clientId)
-            unregisterClient(clientId);
+        if (clientId) {
+            // Grace period: mark as disconnected but keep the registry entry
+            // briefly so pending tool requests can complete or fail gracefully.
+            // The Luau runtime will reconnect with the same sessionId and
+            // refresh the existing entry via registerClient().
+            console.error(`[Primary] Roblox client ${clientId} disconnected (WS close). Keeping entry for reconnect grace period.`);
+            // Resolve any pending HTTP poll with empty array
+            const entry = getClientById(clientId);
+            if (entry) {
+                entry.pendingPollResolve?.([]);
+                entry.pendingPollResolve = null;
+            }
+            // Unregister after a short grace period to allow reconnection
+            setTimeout(() => {
+                const current = getClientById(clientId);
+                // Only remove if the client hasn't reconnected (different WS or refreshed)
+                if (current && current.ws === ws) {
+                    unregisterClient(clientId);
+                    console.error(`[Primary] Roblox client ${clientId} removed after grace period (no reconnect).`);
+                }
+                else if (current && current.ws !== ws) {
+                    console.error(`[Primary] Roblox client ${clientId} reconnected with new WS. Keeping entry.`);
+                }
+            }, 5000);
+        }
         console.error("[Primary] Roblox client disconnected.");
     });
 }

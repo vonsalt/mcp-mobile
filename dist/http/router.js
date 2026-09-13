@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { HTTP_METHODS, } from "./types.js";
 import { isAuthorizedLocalAdminRequest } from "./local-admin.js";
+import { writeAuthorizationServerMetadata, writeProtectedResourceMetadata } from "../oauth/mcp-oauth.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const routesDir = path.join(__dirname, "routes");
 const httpRoutes = [];
@@ -40,11 +41,6 @@ async function walk(dir) {
     return out;
 }
 const GROUP_SEGMENT = /^\(.+\)$/;
-/**
- * Derive a URL pathname from the file's location under routesDir.
- * Directory segments wrapped in parens — e.g. `(auth)` — are groups and
- * are dropped from the URL, matching Next.js behavior.
- */
 function fileToUrlPath(file) {
     const rel = path.relative(routesDir, file);
     const parsed = path.parse(rel);
@@ -110,6 +106,16 @@ export async function dispatchHttp(req, res) {
         !isAuthorizedLocalAdminRequest(req)) {
         res.writeHead(403, { "Content-Type": "application/json", "Cache-Control": "no-store" });
         res.end(JSON.stringify({ error: "Authorized local dashboard access required." }));
+        return;
+    }
+    // Dot-prefixed route directories are not emitted by TypeScript's include glob,
+    // so keep standards-mandated well-known endpoints explicit in the router.
+    if (req.method === "GET" && url.pathname === "/.well-known/oauth-protected-resource/mcp") {
+        writeProtectedResourceMetadata(req, res);
+        return;
+    }
+    if (req.method === "GET" && url.pathname === "/.well-known/oauth-authorization-server") {
+        writeAuthorizationServerMetadata(req, res);
         return;
     }
     for (const route of httpRoutes) {

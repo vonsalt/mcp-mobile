@@ -1,5 +1,7 @@
 # Claude Desktop Setup
 
+> This guide configures a **local stdio** server on the same computer as Claude Desktop. For a public HTTPS server used through Claude's remote connector interface, use the [Claude Remote Connector Guide](claude-connector.md) instead.
+
 ## 1. Open the config file
 
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`

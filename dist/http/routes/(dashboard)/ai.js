@@ -1,10 +1,11 @@
-import { CUSTOM_AI_API_KEY, CUSTOM_AI_BASE_URL, CUSTOM_AI_API_VERSION, CUSTOM_AI_MODEL, CUSTOM_AI_THINKING_ENABLED, } from "../../../config.js";
+import { CUSTOM_AI_API_KEY, CUSTOM_AI_BASE_URL, CUSTOM_AI_API_VERSION, CUSTOM_AI_MODEL, CUSTOM_AI_THINKING_ENABLED, CUSTOM_AI_AUTH_TYPE, } from "../../../config.js";
 export function GET(_req, res) {
     const hasEnvKey = !!CUSTOM_AI_API_KEY;
     const defaultBaseUrl = CUSTOM_AI_BASE_URL;
     const defaultApiVersion = CUSTOM_AI_API_VERSION;
     const defaultModel = CUSTOM_AI_MODEL;
     const thinkingDefault = CUSTOM_AI_THINKING_ENABLED;
+    const defaultAuthType = CUSTOM_AI_AUTH_TYPE;
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -343,7 +344,22 @@ Tap Settings to configure your AI endpoint, then ask me anything.</div>
 
     <label for="api-key-input">API Key ${hasEnvKey ? '(env key active)' : ''}</label>
     <input type="password" id="api-key-input" placeholder="sk-... or your key" value="">
-    <div class="hint">${hasEnvKey ? 'Leave blank to use the env key.' : 'Your API key for the AI service.'}</div>
+    <div class="hint">${hasEnvKey ? 'Leave blank to use the env key.' : 'Your API key for the AI service (used as x-api-key in api-key mode, or as the bearer token in bearer mode).'}</div>
+
+    <label for="auth-type-select">Auth Mode</label>
+    <select id="auth-type-select">
+      <option value="api-key" ${defaultAuthType === 'api-key' ? 'selected' : ''}>API Key (x-api-key header — Anthropic native)</option>
+      <option value="bearer" ${defaultAuthType === 'bearer' ? 'selected' : ''}>Bearer Token (Authorization: Bearer — OAuth/proxy compatible)</option>
+    </select>
+    <div class="hint">Use "API Key" for direct Anthropic API access. Use "Bearer Token" for OAuth-based proxies or Claude-compatible gateways that expect Authorization: Bearer headers.</div>
+
+    <label for="bearer-token-input">Bearer Token (optional, for Bearer mode)</label>
+    <input type="password" id="bearer-token-input" placeholder="OAuth token or proxy key" value="">
+    <div class="hint">If using Bearer auth mode, provide the token here. Falls back to the API Key field if left blank.</div>
+
+    <label for="auth-header-input">Custom Auth Header (optional)</label>
+    <input type="text" id="auth-header-input" placeholder="e.g. X-Custom-Key (leave blank for default)" value="">
+    <div class="hint">Override the auth header name entirely (e.g. for non-standard proxies). Leave blank to use the default for the selected auth mode.</div>
 
     <label for="base-url-input">Base URL</label>
     <input type="text" id="base-url-input" placeholder="${defaultBaseUrl}" value="${defaultBaseUrl}">
@@ -408,6 +424,9 @@ function toggleSettings() {
   overlay.classList.toggle('active');
   if (overlay.classList.contains('active')) {
     document.getElementById('api-key-input').value = localStorage.getItem('custom_ai_api_key') || '';
+    document.getElementById('auth-type-select').value = localStorage.getItem('custom_ai_auth_type') || '${defaultAuthType}';
+    document.getElementById('bearer-token-input').value = localStorage.getItem('custom_ai_bearer_token') || '';
+    document.getElementById('auth-header-input').value = localStorage.getItem('custom_ai_auth_header') || '';
     document.getElementById('base-url-input').value = localStorage.getItem('custom_ai_base_url') || '${defaultBaseUrl}';
     document.getElementById('api-version-input').value = localStorage.getItem('custom_ai_api_version') || '${defaultApiVersion}';
     document.getElementById('model-input').value = localStorage.getItem('custom_ai_model') || '${defaultModel}';
@@ -421,6 +440,14 @@ function saveSettings() {
   var apiKey = document.getElementById('api-key-input').value.trim();
   if (apiKey) localStorage.setItem('custom_ai_api_key', apiKey);
   else localStorage.removeItem('custom_ai_api_key');
+
+  localStorage.setItem('custom_ai_auth_type', document.getElementById('auth-type-select').value);
+  var bearerToken = document.getElementById('bearer-token-input').value.trim();
+  if (bearerToken) localStorage.setItem('custom_ai_bearer_token', bearerToken);
+  else localStorage.removeItem('custom_ai_bearer_token');
+  var authHeader = document.getElementById('auth-header-input').value.trim();
+  if (authHeader) localStorage.setItem('custom_ai_auth_header', authHeader);
+  else localStorage.removeItem('custom_ai_auth_header');
 
   localStorage.setItem('custom_ai_base_url', document.getElementById('base-url-input').value.trim() || '${defaultBaseUrl}');
   localStorage.setItem('custom_ai_api_version', document.getElementById('api-version-input').value.trim() || '${defaultApiVersion}');
@@ -447,6 +474,9 @@ function saveSettings() {
 
 function forgetSettings() {
   localStorage.removeItem('custom_ai_api_key');
+  localStorage.removeItem('custom_ai_auth_type');
+  localStorage.removeItem('custom_ai_bearer_token');
+  localStorage.removeItem('custom_ai_auth_header');
   localStorage.removeItem('custom_ai_base_url');
   localStorage.removeItem('custom_ai_api_version');
   localStorage.removeItem('custom_ai_model');
@@ -454,12 +484,17 @@ function forgetSettings() {
   localStorage.removeItem('custom_ai_thinking_budget');
   localStorage.removeItem('mcp_auth_token');
   document.getElementById('api-key-input').value = '';
+  document.getElementById('bearer-token-input').value = '';
+  document.getElementById('auth-header-input').value = '';
   document.getElementById('auth-token-input').value = '';
 }
 
 function getConfig() {
   return {
     apiKey: localStorage.getItem('custom_ai_api_key') || undefined,
+    authType: localStorage.getItem('custom_ai_auth_type') || '${defaultAuthType}',
+    bearerToken: localStorage.getItem('custom_ai_bearer_token') || undefined,
+    authHeader: localStorage.getItem('custom_ai_auth_header') || undefined,
     baseUrl: localStorage.getItem('custom_ai_base_url') || '${defaultBaseUrl}',
     apiVersion: localStorage.getItem('custom_ai_api_version') || '${defaultApiVersion}',
     model: localStorage.getItem('custom_ai_model') || '${defaultModel}',

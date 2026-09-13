@@ -1,5 +1,5 @@
 import { readJsonBody } from "../../body.js";
-import { CUSTOM_AI_API_KEY, CUSTOM_AI_BASE_URL, CUSTOM_AI_API_VERSION, CUSTOM_AI_MODEL, CUSTOM_AI_MAX_TOKENS, CUSTOM_AI_THINKING_ENABLED, CUSTOM_AI_THINKING_BUDGET, } from "../../../config.js";
+import { CUSTOM_AI_API_KEY, CUSTOM_AI_BASE_URL, CUSTOM_AI_API_VERSION, CUSTOM_AI_MODEL, CUSTOM_AI_MAX_TOKENS, CUSTOM_AI_THINKING_ENABLED, CUSTOM_AI_THINKING_BUDGET, CUSTOM_AI_AUTH_TYPE, CUSTOM_AI_AUTH_HEADER, CUSTOM_AI_BEARER_TOKEN, } from "../../../config.js";
 import { runAgentLoop } from "../../../custom-ai/agent.js";
 function jsonOk(res, data) {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -16,9 +16,7 @@ export async function POST(req, res) {
         if (!message || typeof message !== "string") {
             return jsonErr(res, "Missing 'message' field.");
         }
-        // Build conversation messages in Anthropic format
         const messages = [];
-        // Add history
         if (history && Array.isArray(history)) {
             for (const msg of history) {
                 if (msg.role === "user" || msg.role === "assistant") {
@@ -26,9 +24,7 @@ export async function POST(req, res) {
                 }
             }
         }
-        // Add current message
         messages.push({ role: "user", content: message });
-        // Merge config: request overrides > env defaults
         const agentConfig = {
             apiKey: config?.apiKey || CUSTOM_AI_API_KEY || undefined,
             baseUrl: config?.baseUrl || CUSTOM_AI_BASE_URL,
@@ -37,6 +33,9 @@ export async function POST(req, res) {
             maxTokens: config?.maxTokens || CUSTOM_AI_MAX_TOKENS,
             thinkingEnabled: config?.thinkingEnabled ?? CUSTOM_AI_THINKING_ENABLED,
             thinkingBudget: config?.thinkingBudget || CUSTOM_AI_THINKING_BUDGET,
+            authType: config?.authType || CUSTOM_AI_AUTH_TYPE,
+            bearerToken: config?.bearerToken || CUSTOM_AI_BEARER_TOKEN || undefined,
+            authHeader: config?.authHeader || CUSTOM_AI_AUTH_HEADER || undefined,
         };
         const result = await runAgentLoop(messages, agentConfig);
         return jsonOk(res, {

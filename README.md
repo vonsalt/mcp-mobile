@@ -21,11 +21,17 @@ Use it to see connected Roblox clients, inspect scripts, run tools, view server 
 - **Code Execution** — Run Lua code and fetch data from the game client.
 - **Script Inspection** — Decompile scripts and search across all sources.
 - **Instance Search** — CSS-like selectors and hierarchy trees.
-- **Remote Spy** — Intercept, log, block, and ignore Remotes/Bindables via [Cobalt](https://github.com/notpoiu/cobalt).
+- **Remote Spy** — Intercept, log, block, and ignore Remotes/Bindables via [Cobalt](https://github.com/notpoiu/cobalt). Basic remote inventory mode as fallback.
 - **GUI Interaction** — Click buttons and type into text boxes.
-- **Screenshot** — Capture Roblox window screenshots (Windows only).
+- **Screenshot** — Capture screenshots on Windows (OS-level) or any platform (client-side viewport capture). The AI receives actual images it can visually analyze.
 - **Multi-Client** — Connect multiple Roblox clients at once.
 - **Primary / Secondary** — Multiple MCP instances auto-coordinate with automatic promotion. Supports remote relaying via `--baseurl`. See [Advanced](docs/advanced.md).
+- **Game Understanding** — Player state snapshot, game GUI inspection, activity tracing, and game system discovery for writing automation scripts.
+- **Anti-Cheat Tools** — Scan games for anti-cheat systems with detailed severity-level reports.
+- **Anti-AFK** — Automatically prevents idle disconnections by responding to the `Player.Idled` event. Keeps you in the game.
+- **Claude Remote Connector Support** — Works as a secure custom connector in Claude's web interface. See the [Claude Remote Connector Guide](docs/claude-connector.md).
+- **Custom AI Chat** — Built-in chat interface at `/ai` supporting any Anthropic-compatible API with api-key, bearer token, or custom header auth. Screenshot images are passed to the AI as vision content.
+- **Mobile Support** — Works with mobile executors (Delta, CodeX, VegaX, etc.) with fallbacks for missing APIs. See the [Mobile Setup Guide](docs/setup-mobile.md) or [Mobile-Only Setup Guide](docs/setup-mobile-only.md).
 
 ## Tutorial
 
@@ -42,8 +48,8 @@ Use it to see connected Roblox clients, inspect scripts, run tools, view server 
 ### 1. Clone the server
 
 ```bash
-git clone https://github.com/dissering/roblox-executor-mcp.git
-cd roblox-executor-mcp
+git clone https://github.com/voidhub9-dotcom/mcp-mobile.git
+cd mcp-mobile
 ```
 
 ### 2. Run the harness installer
@@ -91,6 +97,7 @@ If you prefer to configure a client yourself, use the setup guide for your clien
 | -------------- | ------------------------------------------- |
 | Cursor         | [Setup Guide](docs/setup-cursor.md)         |
 | Claude Desktop | [Setup Guide](docs/setup-claude-desktop.md) |
+| **Claude (Web / Mobile / Remote)** | [**Remote Connector Guide**](docs/claude-connector.md) |
 | Claude Code    | [Setup Guide](docs/setup-claude-code.md)    |
 | Codex CLI      | [Setup Guide](docs/setup-codex.md)          |
 | Windsurf       | [Setup Guide](docs/setup-windsurf.md)       |
@@ -120,6 +127,7 @@ getgenv().DisableWebSocket = true                        -- force HTTP polling
 getgenv().DisableInitialScriptDecompMapping = true       -- skip initial decompilation
 getgenv().MCP_FailedScriptResyncInterval = 30            -- retry failed script syncs periodically
 getgenv().MCP_FailedScriptResyncBatchSize = 8            -- bound each periodic retry batch
+getgenv().MCP_DisableAntiAFK = true                       -- disable anti-AFK (enabled by default)
 ```
 
 After the MCP server starts and Roblox connects, open the dashboard:
@@ -138,7 +146,7 @@ Run everything from your phone using Termux. See the [Mobile-Only Setup Guide](d
 
 ```bash
 # In Termux:
-git clone https://github.com/vonsalt/mcp-mobile.git
+git clone https://github.com/voidhub9-dotcom/mcp-mobile.git
 cd mcp-mobile
 bash termux-setup.sh
 bash termux-start.sh --cf
@@ -162,15 +170,57 @@ loadstring(game:HttpGet("https://YOUR-APP.up.railway.app/mobile-connector.luau")
 
 ### Mobile + PC Setup
 
-If you have a PC, see the [Mobile Setup Guide](docs/setup-mobile.md) and [Mobile README](MOBILE-README.md).
+If you have a PC, see the [Mobile Setup Guide](docs/setup-mobile.md).
 
 ```lua
 loadstring(game:HttpGet("http://YOUR_PC_IP:16384/mobile-connector.luau"))("YOUR_PC_IP:16384")
 ```
 
+## Claude (claude.ai) Custom Connector
+
+This server works as a **custom connector** in Claude's web interface (claude.ai). Claude connects to your MCP server over HTTPS using the Streamable HTTP transport.
+
+### Quick Setup
+
+1. **Start the server in HTTP mode:**
+```bash
+node dist/index.js --http
+```
+
+2. **Expose it via HTTPS** (Claude requires HTTPS). Use a tunnel or cloud deployment:
+```bash
+# Option A: Cloudflare Tunnel (free, no signup needed for quick tunnels)
+cloudflared tunnel --url http://localhost:16384
+
+# Option B: Deploy to Railway/Render (provides HTTPS natively)
+# See docs/setup-ios-cloud.md for cloud deployment guide
+```
+
+3. **Set an auth token** for security:
+```bash
+MCP_AUTH_TOKEN=your-secret-token node dist/index.js --http
+```
+
+4. **Add the connector in Claude:**
+   - Go to **Settings > Connectors > Add custom connector**
+   - **Name:** `Roblox MCP`
+   - **URL:** `https://YOUR-TUNNEL-URL/mcp` (do **not** append `?token=`)
+   - Leave OAuth fields blank unless you deliberately use a pre-registered client
+   - Click **Add**, then **Connect**
+   - On the Roblox MCP sign-in page, enter the `MCP_AUTH_TOKEN` configured on the server and choose **Authorize Roblox MCP**
+
+   > Claude discovers OAuth metadata, registers a connector client, and receives a short-lived OAuth token. Do not store the long-lived server token in the connector URL.
+
+5. **Connect your Roblox client** using the connector script:
+```lua
+loadstring(game:HttpGet("http://localhost:16384/mobile-connector.luau"))()
+```
+
+For deployment, OAuth authorization, end-to-end testing, and tool-permission guidance, see the [Claude Remote Connector Guide](docs/claude-connector.md).
+
 ## Custom AI Integration
 
-This server includes a **built-in AI chat interface** — no separate AI client needed. It supports **any Anthropic-compatible API** with custom endpoints, so you can use Claude, DeepSeek, or any compatible provider.
+This server includes a **built-in AI chat interface** — no separate AI client needed. It supports **any Anthropic-compatible API** with flexible auth modes (api-key, bearer token, or custom header), so you can use Claude, DeepSeek, or any compatible provider. Screenshots taken in-game are passed to the AI as vision content — the AI can actually see the game screen.
 
 ### Setup
 
@@ -180,12 +230,13 @@ http://localhost:16384/ai          # local
 https://YOUR-APP.up.railway.app/ai  # cloud
 ```
 2. Tap **Settings** and configure:
-   - **API Key** — your API key
-   - **Base URL** — the Anthropic-compatible endpoint (e.g. `https://api.anthropic.com`, `https://gateway.olagon.site/anthropic`)
+   - **API Key** — your API key or bearer token
+   - **Auth Type** — `api-key` (x-api-key header), `bearer` (Authorization: Bearer), or custom header
+   - **Base URL** — the Anthropic-compatible endpoint (e.g. `https://api.anthropic.com`)
    - **API Version** — e.g. `2023-06-01`
    - **Default Model** — e.g. `claude-sonnet-4-20250514`
    - **Extended Thinking** — toggle to show the AI's reasoning process
-3. Start chatting — the AI can use all MCP tools (execute code, inspect scripts, search, GUI interaction, etc.)
+3. Start chatting — the AI can use all MCP tools (execute code, inspect scripts, search, GUI interaction, take screenshots and see them, etc.)
 
 ### Environment Variables (optional, for cloud deployment)
 
@@ -198,6 +249,9 @@ https://YOUR-APP.up.railway.app/ai  # cloud
 | `CUSTOM_AI_MAX_TOKENS` | `16000` | Max response tokens |
 | `CUSTOM_AI_THINKING_ENABLED` | `false` | Enable extended thinking |
 | `CUSTOM_AI_THINKING_BUDGET` | `10000` | Thinking token budget |
+| `CUSTOM_AI_AUTH_TYPE` | `api-key` | Auth mode: `api-key` (x-api-key header) or `bearer` (Authorization: Bearer) |
+| `CUSTOM_AI_BEARER_TOKEN` | — | Bearer token for OAuth/proxy auth |
+| `CUSTOM_AI_AUTH_HEADER` | — | Custom auth header name override |
 
 ## Community
 
@@ -205,7 +259,7 @@ Have a suggestion or need help? Join the [Discord server](https://discord.gg/FJc
 
 ## Security
 
-> **This server allows arbitrary code execution.** Only use with AI clients you trust. Port `16384` has no authentication — **never expose it to the internet.** For cross-machine setups, use a local network, VPN, or SSH tunnel. See [Advanced](docs/advanced.md) for details.
+> **This server allows arbitrary code execution.** Only use with AI clients you trust. For any publicly reachable deployment, set a strong `MCP_AUTH_TOKEN`; each cloned deployment automatically derives its own OAuth origin and Claude receives short-lived OAuth tokens. Never expose an unauthenticated deployment to the internet. See [Advanced](docs/advanced.md) for details.
 
 ## License
 

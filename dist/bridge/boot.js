@@ -16,7 +16,6 @@ function tryPromote() {
     }, jitter);
 }
 export async function boot() {
-    // ── --baseurl path: try to connect as secondary to remote; fall back to primary ──
     if (BASE_URL) {
         const relayUrl = BASE_URL.replace(/\/$/, "") + "/mcp-relay";
         console.error(`[Boot] --baseurl mode: targeting relay at ${relayUrl}`);
@@ -40,7 +39,6 @@ export async function boot() {
         }, tryPromote);
         return;
     }
-    // ── Normal path: try primary, fall back to localhost secondary ──
     try {
         await startAsPrimary();
     }
