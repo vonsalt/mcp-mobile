@@ -63,7 +63,6 @@ export async function PUT(req, res) {
         placeId: client.placeId,
         jobId: client.jobId,
     };
-    // Look up the existing script to get its path
     const currentIndex = getScriptSourceIndex(identity);
     const existing = currentIndex.scripts.find((s) => s.debugId === debugId);
     if (!existing) {

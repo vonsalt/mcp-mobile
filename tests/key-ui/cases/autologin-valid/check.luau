@@ -1,0 +1,7 @@
+flushPending(4)
+print("\n== auto-login with a valid saved key ==")
+check("no errors", #ERRORS == 0, ERRORS[1])
+check("saved key was trimmed before use", GENV.script_key == "SAVED-KEY-ABC", GENV.script_key)
+check("window closed itself", GENV.VoidHubKeySystem.Destroyed == true)
+check("key still on disk", FAKE_FS["VoidHub/Key.txt"] == "SAVED-KEY-ABC")
+report()

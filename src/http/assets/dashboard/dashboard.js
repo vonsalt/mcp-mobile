@@ -510,6 +510,29 @@ function updateOverview() {
     $('overviewUserId').textContent = c.userId || '—';
     $('overviewJobId').textContent = c.jobId || '—';
 
+    // Set Roblox profile link
+    const profileLink = $('overviewProfileLink');
+    if (profileLink) {
+        if (c.userId && c.userId > 0) {
+            profileLink.href = 'https://www.roblox.com/users/' + c.userId + '/profile';
+            profileLink.style.display = '';
+        } else {
+            profileLink.style.display = 'none';
+        }
+    }
+
+    // Show executor name if available
+    const executorEl = $('overviewExecutor');
+    if (executorEl) {
+        const executorName = c.executorName || c.executor || c.capabilities?.executor;
+        if (executorName) {
+            executorEl.textContent = executorName;
+            executorEl.style.display = '';
+        } else {
+            executorEl.style.display = 'none';
+        }
+    }
+
     const oa = $('overviewAvatar');
     oa.innerHTML = avatarHtml(c.userId, c.username, 56);
 
@@ -518,6 +541,7 @@ function updateOverview() {
     ot.className = 'overview-transport ' + transportClass(c.transport);
 
     $('tileTransport').textContent = c.transport === 'ws' ? 'WebSocket' : 'HTTP Polling';
+    updateMonitor(c);
 
     const sync = c.scriptSync || { mappedSources: 0, sourcesToMap: 0, hasFinishedMapping: false };
     const mapped = Number(sync.mappedSources) || 0;
@@ -577,6 +601,78 @@ function updateOverview() {
     if (semanticIndexBtn) {
         semanticIndexBtn.disabled = mapped === 0 || !!semanticIndexJobId || (isFullyIndexed && syncDone);
     }
+}
+
+function formatMonitorDuration(ms) {
+    const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+}
+
+function monitorSnapshotText(client) {
+    const health = client.health || {};
+    const alerts = Array.isArray(health.sessionAlerts) ? health.sessionAlerts : [];
+    const latest = alerts.length ? alerts[alerts.length - 1] : null;
+    const lines = [
+        'Roblox MCP health snapshot',
+        `Client: ${client.username || 'Unknown'}`,
+        `Place: ${client.placeName || 'Unknown'} (${client.placeId || '—'})`,
+        `Job ID: ${client.jobId || 'Unknown'}`,
+        `Transport: ${(client.transport || 'unknown').toUpperCase()}`,
+        `Session uptime: ${formatMonitorDuration(health.sessionUptimeMs)}`,
+        `Idle time: ${formatMonitorDuration(health.idleMs)}`,
+        `Reconnects: ${Number(health.reconnectCount || 0)}`,
+        `Session changes: ${Number(health.sessionChangeCount || 0)}`,
+    ];
+    if (latest) lines.push(`Latest session change: ${latest.previousJobId || 'unknown'} -> ${latest.currentJobId || 'unknown'} at ${new Date(latest.detectedAt).toISOString()}`);
+    return lines.join('\n');
+}
+
+function updateMonitor(client) {
+    const health = client && client.health ? client.health : null;
+    if (!health) return;
+    const alerts = Array.isArray(health.sessionAlerts) ? health.sessionAlerts : [];
+    const hasAlerts = Number(health.sessionChangeCount || 0) > 0;
+    const state = $('monitorConnectionState');
+    if (state) {
+        state.className = 'monitor-live-state ' + (hasAlerts ? 'is-alert' : (health.currentSessionActive ? 'is-active' : ''));
+        state.innerHTML = '<span></span>' + (hasAlerts ? 'Session change observed' : (health.currentSessionActive ? 'Connector active' : 'Connector inactive'));
+    }
+    const uptime = $('monitorSessionUptime'); if (uptime) uptime.textContent = formatMonitorDuration(health.sessionUptimeMs);
+    const lastSeen = $('monitorLastSeen'); if (lastSeen) lastSeen.textContent = `Last bridge activity ${formatMonitorDuration(health.idleMs)} ago`;
+    const reconnects = $('monitorReconnects'); if (reconnects) reconnects.textContent = String(Number(health.reconnectCount || 0));
+    const changes = $('monitorSessionChanges'); if (changes) changes.textContent = String(Number(health.sessionChangeCount || 0));
+    const job = $('monitorJobId'); if (job) job.textContent = client.jobId ? client.jobId.slice(0, 18) + (client.jobId.length > 18 ? '…' : '') : '—';
+    const place = $('monitorPlace'); if (place) place.textContent = `${client.placeName || 'Unknown place'} · ${client.transport === 'ws' ? 'WebSocket' : 'HTTP polling'}`;
+    const healthNote = $('monitorHealthNote');
+    if (healthNote) healthNote.textContent = `Active for ${formatMonitorDuration(health.sessionUptimeMs)} · ${Number(health.registrationCount || 1)} registrations · ${client.executor || 'Unknown executor'}`;
+
+    const alertList = $('monitorAlerts');
+    if (alertList) {
+        if (!alerts.length) {
+            alertList.innerHTML = '<div class="monitor-empty-state">No session changes have been observed for this connector.</div>';
+        } else {
+            alertList.innerHTML = alerts.slice(-4).reverse().map(alert => {
+                const when = new Date(alert.detectedAt);
+                const from = `${alert.previousPlaceName || 'Unknown'} · ${alert.previousJobId || 'unknown'}`;
+                const to = `${alert.currentPlaceName || 'Unknown'} · ${alert.currentJobId || 'unknown'}`;
+                return `<div class="monitor-alert"><i class="monitor-alert-dot"></i><div class="monitor-alert-main"><strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong><span>Server or place changed; the dashboard only recorded this event.</span></div><time>${escapeHtml(formatTime(when))}</time></div>`;
+            }).join('');
+        }
+    }
+}
+
+const monitorCopySnapshot = $('monitorCopySnapshot');
+if (monitorCopySnapshot) {
+    monitorCopySnapshot.addEventListener('click', () => {
+        const client = clients.find(c => c.clientId === selectedClientId);
+        if (!client) return showToast('Select a connected client first', 'error');
+        copyText(monitorSnapshotText(client), 'Health snapshot');
+    });
 }
 
 /* ── Render overview clients ─────────────────────────────── */

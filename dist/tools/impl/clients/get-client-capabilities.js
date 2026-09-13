@@ -28,7 +28,6 @@ export default function register(server) {
                 const available = target.capabilities[name];
                 lines.push(`  ${available ? "[OK]" : "[--]"} ${name}`);
             }
-            // Determine which tools are likely to work
             lines.push("");
             lines.push("Tool Availability:");
             const caps = target.capabilities;

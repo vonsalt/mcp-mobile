@@ -16,7 +16,6 @@ export async function POST(req, res) {
         if (!message || typeof message !== "string") {
             return jsonErr(res, "Missing 'message' field.");
         }
-        // Build conversation messages
         const messages = [
             {
                 role: "system",
@@ -26,7 +25,6 @@ export async function POST(req, res) {
                     "Always explain what you're doing and share the results of tool calls.",
             },
         ];
-        // Add history
         if (history && Array.isArray(history)) {
             for (const msg of history) {
                 if (msg.role === "user" || msg.role === "assistant") {
@@ -34,9 +32,7 @@ export async function POST(req, res) {
                 }
             }
         }
-        // Add current message
         messages.push({ role: "user", content: message });
-        // Use provided key or fall back to env
         const effectiveKey = apiKey || DEEPSEEK_API_KEY || undefined;
         const effectiveModel = model || DEEPSEEK_MODEL;
         const result = await runAgentLoop(messages, effectiveKey, effectiveModel);

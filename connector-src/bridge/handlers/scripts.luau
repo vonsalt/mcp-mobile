@@ -22,13 +22,31 @@ local QueueMappedScriptSource = context.QueueMappedScriptSource
         end
 
         local scriptHash
-        source, _, scriptHash = DecompileScriptSource(
+        local decompileError
+        source, decompileError, scriptHash = DecompileScriptSource(
             scriptInstance,
             nil,
             ScriptMappingPipeline.generation,
             ScriptMappingPipeline.clientId
         )
-        assert(source, "Failed to decompile script.")
+
+        if not source and scriptInstance then
+            local ok, src = pcall(function() return scriptInstance.Source end)
+            if ok and type(src) == "string" and src ~= "" then
+                source = src
+                decompileError = nil
+            end
+        end
+
+        if not source and scriptInstance and type(getscriptbytecode) == "function" then
+            local ok, bytecode = pcall(function() return getscriptbytecode(scriptInstance) end)
+            if ok and type(bytecode) == "string" and #bytecode > 0 then
+                source = "-- Bytecode (decompile unavailable). Length: " .. #bytecode .. " bytes\n" .. bytecode
+                decompileError = nil
+            end
+        end
+
+        assert(source, "Failed to decompile script. " .. tostring(decompileError or "No decompile function or script source available on this executor."))
 
         local debugId = scriptInstance:GetDebugId()
         local mappingJob = ScriptMappingPipeline.jobs[debugId]

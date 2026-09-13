@@ -66,7 +66,6 @@ export default function register(server) {
             maxOutputChars: maxOutputCharsSchema,
         }),
     }, async ({ query, limit, minScore, requireFullIndex, indexOnly, maxOutputChars }) => {
-        // Secondary mode: script sources and embeddings live on the primary.
         if (isSecondaryRelay()) {
             return relayToolToApi("semantic-search", {
                 query,

@@ -38,8 +38,6 @@ function futureMs(remainingMs, now) {
     return now + duration;
 }
 function healthKey(id, clientId) {
-    // Executor built-ins are client capabilities. Hosted/server providers are
-    // shared infrastructure and retain one global health circuit.
     const scope = id === "builtin" ? clientId : "server";
     return `${scope}\0${id}`;
 }

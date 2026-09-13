@@ -348,7 +348,6 @@ export async function semanticSearchScripts(index, settings, query, limit, minSc
     });
     const key = sessionKey(index, settings);
     const session = getOrCreateSession(key);
-    // Load any persisted embeddings from disk without generating new ones
     if (settings.saveEmbeddingsToDisk) {
         const uniqueChunks = uniqueChunksByEmbedding(chunks);
         for (const chunk of uniqueChunks) {
@@ -359,18 +358,15 @@ export async function semanticSearchScripts(index, settings, query, limit, minSc
                 session.vectors.set(chunk.embeddingId, embedding);
         }
     }
-    // Check how many chunks already have embeddings
     const embeddedCount = countEmbeddedChunkAliases(session, chunks);
     const uniqueChunks = uniqueChunksByEmbedding(chunks);
     const embeddedUniqueCount = uniqueChunks.filter((c) => session.vectors.has(c.embeddingId)).length;
     const totalUniqueCount = uniqueChunks.length;
     const isFullyIndexed = embeddedUniqueCount >= totalUniqueCount;
     if (isFullyIndexed) {
-        // Fully indexed — embed any remaining aliases and search
         await embedMissingChunks(session, key, chunks, settings, onProgress);
     }
     else if (embeddedCount > 0) {
-        // Partially indexed — skip blocking embed, search from what we have
         onProgress?.({
             message: `Searching from ${embeddedCount}/${chunks.length} cached embeddings (index incomplete: ${embeddedUniqueCount}/${totalUniqueCount} unique chunks)`,
             completed: embeddedCount,
@@ -378,7 +374,6 @@ export async function semanticSearchScripts(index, settings, query, limit, minSc
         });
     }
     else {
-        // No embeddings at all — must embed everything
         await embedMissingChunks(session, key, chunks, settings, onProgress);
     }
     onProgress?.({

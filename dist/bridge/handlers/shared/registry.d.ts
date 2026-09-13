@@ -1,5 +1,6 @@
 import { WebSocket } from "ws";
-import type { RobloxClient } from "../../types.js";
+import type { ClientSessionAlert, RobloxClient } from "../../types.js";
+export declare const HTTP_CLIENT_ACTIVE_GRACE_MS: number;
 export declare function cleanupInactiveHttpClients(now?: number): number;
 export declare function getActiveClientId(): string | undefined;
 export declare function setActiveClientId(clientId: string, options?: {
@@ -22,6 +23,18 @@ export declare function registerClient(info: {
 }): string;
 export declare function unregisterClient(clientId: string): void;
 export declare function getClientById(clientId: string): RobloxClient | undefined;
+export declare function getClientMonitoring(client: RobloxClient, now?: number): {
+    connectedAt: number;
+    lastRegistrationAt: number;
+    lastSeenAt: number;
+    sessionUptimeMs: number;
+    idleMs: number;
+    registrationCount: number;
+    reconnectCount: number;
+    sessionChangeCount: number;
+    currentSessionActive: boolean;
+    sessionAlerts: ClientSessionAlert[];
+};
 export declare function getClientIdByWs(ws: WebSocket): string | undefined;
 export declare function getActiveClients(): RobloxClient[];
 export declare function formatActiveClientListForTool(): string;

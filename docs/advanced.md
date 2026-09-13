@@ -66,3 +66,5 @@ Under **Settings → Decompiler fallbacks**, choose **Add provider → Custom pr
 - Use a **local network** or **VPN**
 - Use an **SSH tunnel**: `ssh -L 16384:localhost:16384 user@windows-machine`
 - **Never** forward the port through a public router or cloud firewall
+
+For a publicly hosted Streamable HTTP MCP endpoint used by Claude, configure a strong `MCP_AUTH_TOKEN` and follow the [Claude Remote Connector Guide](claude-connector.md). That guide documents the separate OAuth-protected `/mcp` flow; it does not make an unauthenticated raw bridge safe to expose.

@@ -32,6 +32,12 @@ local RobloxReplicatedStorage = context.RobloxReplicatedStorage
 
     Bridge:BindToType("get-game-info", function(data)
         local productInfo = MarketplaceService:GetProductInfo(game.PlaceId)
+        local player = game.Players.LocalPlayer
+
+        local serverType = nil
+        pcall(function()
+            serverType = RobloxReplicatedStorage.GetServerType:InvokeServer()
+        end)
 
         local info = {
             PlaceId = game.PlaceId,
@@ -42,11 +48,23 @@ local RobloxReplicatedStorage = context.RobloxReplicatedStorage
             CreatorType = tostring(productInfo.Creator.CreatorType),
             CreatorId = productInfo.Creator.CreatorTargetId,
             JobId = game.JobId,
-            ServerType = RobloxReplicatedStorage.GetServerType:InvokeServer()
+            ServerType = serverType,
+            LocalPlayer = player and {
+                Name = player.Name,
+                UserId = player.UserId,
+                DisplayName = player.DisplayName,
+                AccountAge = player.AccountAge,
+                Team = player.Team and player.Team.Name or nil,
+            } or nil,
+            Workspace = {
+                ChildCount = #game.Workspace:GetChildren(),
+                CameraSubject = game.Workspace.CurrentCamera and tostring(game.Workspace.CurrentCamera.CameraSubject) or nil,
+            },
+            PlayerCount = #game.Players:GetPlayers(),
+            MaxPlayers = game.Players.MaxPlayers,
+            IsStudio = game:GetService("RunService"):IsStudio(),
         }
 
-        -- The marketplace description can be multi-kB of marketing text that is
-        -- pure noise for debugging, so omit it unless explicitly requested.
         if data.includeDescription == true then
             info.PlaceDescription = productInfo.Description
         end

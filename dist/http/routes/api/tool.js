@@ -71,14 +71,11 @@ export async function POST(req, res) {
         const { type, clientId, ...params } = body;
         if (!type)
             return jsonErr(res, "Missing 'type' field.");
-        // Resolve target client
         const target = resolveTargetClient(clientId);
         if (!target)
             return jsonErr(res, "No active client found.");
-        // Set active client for this request
         if (clientId)
             setActiveClientId(target.clientId);
-        // ── Script Grep (server-side search) ──────────────────────────────────────
         if (type === "script-grep") {
             const query = params.query;
             if (!query)
@@ -142,7 +139,6 @@ export async function POST(req, res) {
                 result: resultText(header + (body ? "\n\n" + body : ""), params, "Rerun script-grep with a narrower query, lower limit, or lower maxResults."),
             });
         }
-        // ── Semantic Search (server-side) ─────────────────────────────────────────
         if (type === "semantic-search") {
             const query = params.query;
             if (!query)
@@ -186,7 +182,6 @@ export async function POST(req, res) {
             })();
             return jsonOk(res, { jobId: job.id, progressUrl: `/api/tool-progress?id=${job.id}` });
         }
-        // ── Get Script Content (server-side index + client fallback) ───────────────
         if (type === "get-script-content") {
             const scriptPath = params.scriptPath;
             const scriptGetterSource = params.scriptGetterSource;
@@ -196,7 +191,6 @@ export async function POST(req, res) {
             if (!scriptPath && !scriptGetterSource)
                 return jsonErr(res, "Missing 'scriptPath' or 'scriptGetterSource'.");
             const scriptProxyMatch = (scriptPath ?? scriptGetterSource ?? "").match(/^<ScriptProxy: (.+)>$/);
-            // Try server-side index first
             if (scriptPath) {
                 const index = getScriptSourceIndex({
                     clientId: target.clientId,
@@ -210,7 +204,6 @@ export async function POST(req, res) {
                     });
                 }
             }
-            // Fall back to dispatching to Roblox client
             const data = scriptProxyMatch
                 ? { debugId: scriptProxyMatch[1], startLine, endLine, maxLines }
                 : {
@@ -231,7 +224,6 @@ export async function POST(req, res) {
                 result: resultText(response.output ?? "No output returned.", params, "Rerun get-script-content with startLine/endLine or a smaller maxLines value."),
             });
         }
-        // ── Client-dispatched tools ───────────────────────────────────────────────
         const dispatchTypes = {
             "get-data-by-code": "get-data-by-code",
             "execute": "execute",
@@ -244,7 +236,6 @@ export async function POST(req, res) {
         const robloxType = dispatchTypes[type];
         if (!robloxType)
             return jsonErr(res, `Unknown tool type: ${type}`);
-        // Build data for the client
         const data = {};
         if (type === "remote-spy") {
             Object.assign(data, params);

@@ -117,6 +117,7 @@ local function ProbeCapabilities()
     --// HTTP APIs \\\\
     CheckCapability("request", function() return type(request) == "function" end)
     CheckCapability("http_request", function() return type(http_request) == "function" end)
+    CheckCapability("syn_request", function() return type(syn_request) == "function" end)
     CheckCapability("syn.request", function() return type(syn) == "table" and type(syn.request) == "function" end)
     CheckCapability("http_get", function() return type(http_get) == "function" end)
     CheckCapability("game.HttpGet", function() return type(game.HttpGet) == "function" end)
@@ -165,14 +166,15 @@ end
 local function GetHTTPFunction()
     if type(request) == "function" then return request end
     if type(http_request) == "function" then return http_request end
+    if type(syn_request) == "function" then return syn_request end
     if type(syn) == "table" and type(syn.request) == "function" then return syn.request end
     if type(http_get) == "function" then
-        --// http_get is simpler (GET only) - wrap it \\\\
+        --// http_get is GET-only; report partial support clearly.
         return function(opts)
-            if opts.Method == "GET" then
-                return { Body = http_get(opts.Url), StatusCode = 200 }
+            if string.upper(tostring(opts.Method or "GET")) == "GET" then
+                return { Body = http_get(opts.Url), StatusCode = 200, Success = true }
             end
-            error("http_get only supports GET requests")
+            error("http_get only supports GET requests; use syn_request or another request-style API for MCP registration")
         end
     end
     return nil
@@ -188,8 +190,16 @@ local function GenerateWarnings()
         table.insert(results.warnings, "getgenv not available - cannot configure MCP settings")
     end
 
-    if not results.capabilities.request and not results.capabilities.http_request and not results.capabilities["syn.request"] then
-        table.insert(results.warnings, "No HTTP request function available - cannot connect to MCP server")
+    local hasRequestAPI = results.capabilities.request
+        or results.capabilities.http_request
+        or results.capabilities.syn_request
+        or results.capabilities["syn.request"]
+    if not hasRequestAPI then
+        if results.capabilities.http_get or results.capabilities["game.HttpGet"] then
+            table.insert(results.warnings, "Only GET HTTP support is available. The connector can fetch scripts and poll, but needs syn_request, syn.request, request, or http_request to register with an authenticated MCP bridge.")
+        else
+            table.insert(results.warnings, "No HTTP request function available - cannot connect to MCP server")
+        end
     end
 
     if not results.capabilities.WebSocket then
@@ -211,7 +221,10 @@ end
 
 --// Determine readiness \\\\
 local function CheckReadiness()
-    local hasHTTP = results.capabilities.request or results.capabilities.http_request or results.capabilities["syn.request"]
+    local hasHTTP = results.capabilities.request
+        or results.capabilities.http_request
+        or results.capabilities.syn_request
+        or results.capabilities["syn.request"]
     local hasLoadstring = results.capabilities.loadstring
     local hasGetgenv = results.capabilities.getgenv
 
@@ -235,7 +248,8 @@ local function GenerateLoaderScript(bridgeUrl)
         table.insert(lines, "getgenv().DisableInitialScriptDecompMapping = true")
     end
     table.insert(lines, "")
-    table.insert(lines, "loadstring(game:HttpGet(\"http://" .. bridgeUrl .. "/script.luau\"))()")
+    table.insert(lines, "local mcp_http_get = http_get or function(url) return game:HttpGet(url) end")
+    table.insert(lines, "loadstring(mcp_http_get(\"http://" .. bridgeUrl .. "/script.luau\"))()")
 
     return table.concat(lines, "\n")
 end

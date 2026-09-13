@@ -26,6 +26,7 @@
     "build": "node scripts/clean-dist.mjs && tsc && node scripts/copy-assets.mjs",
     "build:all": "npm run build:connector && npm run build",
     "test": "npm run build:all && node --test tests/*.test.mjs && luau tests/connector-modules.test.luau",
+    "test:key-ui": "sh tests/key-ui/run.sh",
     "dev": "node scripts/dev-server.mjs",
     "dev:dist": "bun run build && bun scripts/dev-server.mjs --dist",
     "install:tailscale": "bun scripts/install-tailscale.mjs",
@@ -51,6 +52,7 @@
   "devDependencies": {
     "@types/node": "^25.0.3",
     "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }
