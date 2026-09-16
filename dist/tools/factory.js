@@ -5,28 +5,14 @@ import { INVALID_CLIENT_ERROR, NO_CLIENT_ERROR } from "./errors.js";
 export const DEFAULT_TOOL_OUTPUT_CHAR_LIMIT = 6000;
 export const HARD_TOOL_OUTPUT_CHAR_LIMIT = 32000;
 export const MAX_ERROR_RESPONSE_CHARS = 500;
-/**
- * Check if the current instance is a secondary relay.
- * Secondaries can be created either via --baseurl or automatically when
- * the port is already in use (EADDRINUSE fallback).
- */
 export function isSecondaryRelay() {
     return getInstanceRole() === "secondary";
 }
-/**
- * Get the base URL of the primary server.
- * If --baseurl was specified, use that. Otherwise fall back to localhost.
- */
 function getPrimaryBaseUrl() {
     if (BASE_URL)
         return BASE_URL.replace(/\/$/, "");
     return `http://localhost:${WS_PORT}`;
 }
-/**
- * Relay a tool call to the primary's /api/tool HTTP endpoint.
- * Handles both immediate results and progress-job-based async responses
- * (polls /api/tool-progress until done).
- */
 export async function relayToolToApi(type, params, timeoutMs = 60000, outputOptions = {}) {
     const primaryBase = getPrimaryBaseUrl();
     const toolUrl = primaryBase + "/api/tool";
@@ -45,11 +31,9 @@ export async function relayToolToApi(type, params, timeoutMs = 60000, outputOpti
         if (data.error) {
             return toolTextResponse(data.error, outputOptions, true);
         }
-        // Immediate result
         if (data.result !== undefined) {
             return toolTextResponse(String(data.result), outputOptions);
         }
-        // Progress-job based (semantic search/index)
         if (data.jobId && data.progressUrl) {
             const progressUrl = primaryBase + data.progressUrl;
             const deadline = Date.now() + timeoutMs;
@@ -85,9 +69,6 @@ export function formatToolText(text, options = {}) {
     const omitted = text.length - maxOutputChars;
     const hint = options.truncationHint ??
         "Rerun with narrower filters, line ranges, or a smaller maxOutputChars value.";
-    // Head+tail truncation: keep the start (typically headers/most relevant)
-    // AND the end (footers, continuation hints, last results) so tail-critical
-    // information is not silently discarded (mitigates lost-in-the-middle).
     const marker = `\n\n[... ${omitted} characters omitted in the middle. ${hint} ...]\n\n`;
     const budget = maxOutputChars - marker.length;
     if (budget <= 0) {
@@ -103,11 +84,6 @@ export function toolTextResponse(text, options = {}, isError = false) {
         ...(isError ? { isError: true } : {}),
     };
 }
-/**
- * Build a compact one-line stamp identifying the client a result came from,
- * so the model does not blend stale results across clients (context poisoning).
- * Returns "" when it can't be resolved (e.g. secondary relay).
- */
 export function clientStampPrefix() {
     try {
         const clientId = getActiveClientId();
@@ -121,10 +97,6 @@ export function clientStampPrefix() {
         return "";
     }
 }
-/**
- * Summarize a Roblox response for an error message without dumping the entire
- * (potentially large) object into the model context.
- */
 export function describeResponse(response) {
     if (response === undefined)
         return "no response (timed out).";
@@ -136,11 +108,6 @@ export function describeResponse(response) {
         ? serialized.slice(0, MAX_ERROR_RESPONSE_CHARS) + " …(truncated)"
         : serialized;
 }
-/**
- * Dispatch a request to the Roblox client and wait for the response.
- * Handles the no-client / invalid-client / timeout boilerplate that every
- * tool used to repeat.
- */
 export async function sendAndWait(options) {
     const callId = SendArbitraryDataToClient(options.type, options.data, undefined, getActiveClientId());
     if (callId === null)
@@ -168,10 +135,6 @@ export async function sendAndWait(options) {
         truncationHint: options.truncationHint,
     });
 }
-/**
- * Dispatch a request without waiting for a response.
- * Returns a success message once the request has been queued/sent.
- */
 export function sendFireAndForget(options) {
     const callId = SendArbitraryDataToClient(options.type, options.data, undefined, getActiveClientId());
     if (callId === null)

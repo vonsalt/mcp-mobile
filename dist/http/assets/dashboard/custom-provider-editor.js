@@ -166,7 +166,7 @@
             const workflow = normalizeWorkflow(initial);
             this.state = {
                 name: cleanString(initial.name, 'Custom'),
-                apiKey: initial.apiKey || (initial.apiKeySet ? '••••••••' : ''),
+                apiKey: initial.apiKey || (initial.apiKeySet ? 'â¢â¢â¢â¢â¢â¢â¢â¢' : ''),
                 nodes: workflow.nodes,
                 edges: workflow.edges,
                 selectedNodeId: workflow.nodes.find((node) => node.type === 'request')?.id || workflow.nodes[0]?.id || null,
@@ -211,10 +211,10 @@
                         </div>
                     </div>
                     <div class="custom-node-toolbar-spacer"></div>
-                    <button type="button" class="custom-node-icon-btn" data-editor-undo aria-label="Undo" title="Undo (⌘Z or Ctrl+Z)" disabled>↶</button>
-                    <button type="button" class="custom-node-icon-btn" data-editor-redo aria-label="Redo" title="Redo (⌘⇧Z, Ctrl+Shift+Z, or Ctrl+Y)" disabled>↷</button>
+                    <button type="button" class="custom-node-icon-btn" data-editor-undo aria-label="Undo" title="Undo (âZ or Ctrl+Z)" disabled>â¶</button>
+                    <button type="button" class="custom-node-icon-btn" data-editor-redo aria-label="Redo" title="Redo (ââ§Z, Ctrl+Shift+Z, or Ctrl+Y)" disabled>â·</button>
                     <button type="button" class="custom-node-toolbar-btn" data-editor-fit>Fit</button>
-                    <button type="button" class="custom-node-icon-btn" data-editor-zoom-out aria-label="Zoom out">−</button>
+                    <button type="button" class="custom-node-icon-btn" data-editor-zoom-out aria-label="Zoom out">â</button>
                     <output class="custom-node-zoom" data-editor-zoom>75%</output>
                     <button type="button" class="custom-node-icon-btn" data-editor-zoom-in aria-label="Zoom in">+</button>
                 </div>
@@ -226,7 +226,7 @@
                                 <div class="custom-node-layer" data-editor-nodes></div>
                             </div>
                         </div>
-                        <div class="custom-node-canvas-help">Drag empty space to pan · Scroll to zoom · Drag ports to connect</div>
+                        <div class="custom-node-canvas-help">Drag empty space to pan Â· Scroll to zoom Â· Drag ports to connect</div>
                     </div>
                     <aside class="custom-node-inspector" data-editor-inspector></aside>
                 </div>
@@ -323,9 +323,6 @@
             const panX = Math.round(this.state.panX * deviceScale) / deviceScale;
             const panY = Math.round(this.state.panY * deviceScale) / deviceScale;
 
-            // Keep node text out of a scaled transform layer. CSS zoom performs
-            // layout at the requested scale, so Chromium rasterizes text and
-            // controls at their displayed size instead of enlarging a bitmap.
             world.style.left = `${panX}px`;
             world.style.top = `${panY}px`;
             zoomLayer.style.zoom = String(this.state.zoom);
@@ -417,7 +414,7 @@
             if (edge) {
                 const source = this.node(edge.source);
                 const target = this.node(edge.target);
-                inspector.innerHTML = `<div class="custom-node-inspector-head"><div><span>Connection</span><strong>${escapeHtml(NODE_TYPES[source?.type]?.label || '')} → ${escapeHtml(NODE_TYPES[target?.type]?.label || '')}</strong></div></div><button type="button" class="custom-node-danger-btn" data-editor-delete-edge="${escapeHtml(edge.id)}">Delete connection</button>`;
+                inspector.innerHTML = `<div class="custom-node-inspector-head"><div><span>Connection</span><strong>${escapeHtml(NODE_TYPES[source?.type]?.label || '')} â ${escapeHtml(NODE_TYPES[target?.type]?.label || '')}</strong></div></div><button type="button" class="custom-node-danger-btn" data-editor-delete-edge="${escapeHtml(edge.id)}">Delete connection</button>`;
                 return;
             }
             const node = this.node(this.state.selectedNodeId);
@@ -439,7 +436,7 @@
                 fields += this.templateField('Body', 'bodyTemplate', node.config.bodyTemplate ?? '', 7, '{\n  "script": "{{bytecode}}"\n}');
             }
             inspector.innerHTML = `
-                <div class="custom-node-inspector-head"><div><span>${escapeHtml(info.group)}</span><strong>${escapeHtml(info.label)}</strong></div>${info.permanent ? '<span class="custom-node-permanent-label">Required</span>' : `<button type="button" data-editor-delete-node="${escapeHtml(node.id)}" aria-label="Delete block">×</button>`}</div>
+                <div class="custom-node-inspector-head"><div><span>${escapeHtml(info.group)}</span><strong>${escapeHtml(info.label)}</strong></div>${info.permanent ? '<span class="custom-node-permanent-label">Required</span>' : `<button type="button" data-editor-delete-node="${escapeHtml(node.id)}" aria-label="Delete block">Ã</button>`}</div>
                 <div class="custom-node-inspector-errors" data-editor-node-errors ${errors.length ? '' : 'hidden'}>${errors.map((message) => `<div>${escapeHtml(message)}</div>`).join('')}</div>
                 <div class="custom-node-inspector-fields">${fields}</div>
             `;

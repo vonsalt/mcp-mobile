@@ -467,10 +467,6 @@ export function resolveDecompilerProviders(settings, options = {}) {
         if (!provider?.enabled || disabledProviders.has(id))
             continue;
         const skip = shouldSkipDecompilerProvider(id, runtime, options.clientId);
-        // A failed-script resync explicitly requests the provider that handled its
-        // first attempt. Give that provider one real retry even while adaptive
-        // health policy has it in cooldown; subsequent providers still follow the
-        // normal filtered fallback plan.
         if (skip.skip && id !== requestedProvider) {
             skippedAttempts.push(`[${id}] skipped: ${skip.reason ?? "provider is temporarily unavailable"}`);
             continue;

@@ -181,10 +181,12 @@
                         <div class="overview-meta">
                             <h1 class="overview-username" id="overviewUsername">—</h1>
                             <p class="overview-place" id="overviewPlace">—</p>
+                            <a class="overview-profile-link" id="overviewProfileLink" href="#" target="_blank" rel="noopener">View Roblox Profile →</a>
                         </div>
                     </div>
                     <div class="overview-hero-right">
                         <div class="overview-transport" id="overviewTransport">WS</div>
+                        <div class="overview-executor" id="overviewExecutor" style="display:none"></div>
                     </div>
                 </div>
 
@@ -233,7 +235,102 @@
                             </div>
                         </div>
                     </div>
+                    <div class="status-tile">
+                        <div class="status-tile-header">
+                            <span class="status-tile-title">Script Sync Progress</span>
+                        </div>
+                        <div class="status-tile-body">
+                            <div class="sync-progress-container">
+                                <div class="sync-progress-bar">
+                                    <div class="sync-progress-fill" id="syncProgressFill" style="width:0%"></div>
+                                </div>
+                                <span class="sync-progress-text" id="scriptsSyncPerc">0%</span>
+                            </div>
+                            <div class="status-tile-stat" style="margin-top:6px">
+                                <span class="status-tile-stat-label">Scripts</span>
+                                <span class="status-tile-stat-value" id="scriptsSyncCount">0/0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="status-tile">
+                        <div class="status-tile-header">
+                            <span class="status-tile-title">Semantic Index</span>
+                        </div>
+                        <div class="status-tile-body">
+                            <div class="sync-progress-container">
+                                <div class="sync-progress-bar">
+                                    <div class="sync-progress-fill" id="indexProgressFill" style="width:0%"></div>
+                                </div>
+                                <span class="sync-progress-text" id="scriptsIndexPerc">0%</span>
+                            </div>
+                            <div class="status-tile-stat" style="margin-top:6px">
+                                <span class="status-tile-stat-label">Chunks</span>
+                                <span class="status-tile-stat-value" id="scriptsChunkCount">0/0</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- ─── Live monitor workspace ───────────────── -->
+                <section class="monitor-shell" aria-label="Connector monitoring">
+                    <div class="monitor-heading">
+                        <div>
+                            <span class="monitor-eyebrow">LIVE CONNECTOR MONITOR</span>
+                            <h2>Session command center</h2>
+                            <p>Read-only connection health for the active Roblox client.</p>
+                        </div>
+                        <div class="monitor-live-state" id="monitorConnectionState"><span></span>Waiting for client</div>
+                    </div>
+
+                    <div class="monitor-metrics">
+                        <article class="monitor-metric-card monitor-metric-card--primary">
+                            <span>Session uptime</span>
+                            <strong id="monitorSessionUptime">—</strong>
+                            <small id="monitorLastSeen">No recent activity</small>
+                        </article>
+                        <article class="monitor-metric-card">
+                            <span>Reconnects</span>
+                            <strong id="monitorReconnects">0</strong>
+                            <small>Recorded by the bridge</small>
+                        </article>
+                        <article class="monitor-metric-card">
+                            <span>Server changes</span>
+                            <strong id="monitorSessionChanges">0</strong>
+                            <small>Observed, never blocked</small>
+                        </article>
+                        <article class="monitor-metric-card">
+                            <span>Current server</span>
+                            <strong class="monitor-job-id" id="monitorJobId">—</strong>
+                            <small id="monitorPlace">No place selected</small>
+                        </article>
+                    </div>
+
+                    <div class="monitor-grid">
+                        <article class="monitor-panel monitor-panel--alerts">
+                            <div class="monitor-panel-head">
+                                <div>
+                                    <span class="monitor-panel-kicker">SESSION ALERTS</span>
+                                    <h3>Server movement timeline</h3>
+                                </div>
+                                <span class="monitor-readonly">READ ONLY</span>
+                            </div>
+                            <div class="monitor-alert-list" id="monitorAlerts">
+                                <div class="monitor-empty-state">No session changes have been observed for this connector.</div>
+                            </div>
+                        </article>
+                        <article class="monitor-panel monitor-panel--snapshot">
+                            <div class="monitor-panel-head">
+                                <div>
+                                    <span class="monitor-panel-kicker">DIAGNOSTICS</span>
+                                    <h3>Capture context fast</h3>
+                                </div>
+                            </div>
+                            <p>Copy a compact read-only health snapshot, then use the MCP diagnostic tool in Claude for game, player, and console context.</p>
+                            <div class="monitor-snapshot-meta" id="monitorHealthNote">Waiting for connector telemetry.</div>
+                            <button class="monitor-copy-button" id="monitorCopySnapshot" type="button">Copy health snapshot</button>
+                        </article>
+                    </div>
+                </section>
             </div>
 
             <!-- ─── Server Logs view (home mode) ─────────────── -->
@@ -940,7 +1037,9 @@
         </div>
     </div>
 
+    <link rel="stylesheet" href="dashboard-experience.css">
     <script src="custom-provider-editor.js"></script>
     <script type="module" src="dashboard.js"></script>
+    <script type="module" src="dashboard-experience.js"></script>
 </body>
 </html>

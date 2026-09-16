@@ -2,6 +2,8 @@
 
 > Run the entire Roblox Executor MCP from your Android phone — no PC required.
 
+> For Claude connector setup, deployment checks, and safe tool permissions, see the [Claude Remote Connector Guide](claude-connector.md).
+
 Everything runs on your phone:
 - **Termux** runs the MCP server (Node.js)
 - **Roblox executor** (Delta/CodeX) loads the connector and connects to localhost
@@ -50,8 +52,8 @@ In Termux:
 
 ```bash
 pkg install git -y
-git clone https://github.com/dissering/roblox-executor-mcp.git
-cd roblox-executor-mcp
+git clone https://github.com/voidhub9-dotcom/mcp-mobile.git
+cd mcp-mobile
 ```
 
 ## Step 3: Run the Setup Script
@@ -82,7 +84,11 @@ ngrok authtoken YOUR_TOKEN  # get from ngrok.com
 
 ## Step 5: Start Everything
 
+Before exposing the server through a public tunnel, set a strong bridge token in the same Termux session. Keep this value private: it authorizes the Roblox bridge and approves Claude’s OAuth sign-in.
+
 ```bash
+export MCP_AUTH_TOKEN="$(node -e 'console.log(require("crypto").randomBytes(24).toString("hex"))')"
+echo "Save this token securely: $MCP_AUTH_TOKEN"
 bash termux-start.sh
 ```
 
@@ -106,10 +112,11 @@ The script will print:
 In your mobile Roblox executor (Delta, CodeX, etc.), run:
 
 ```lua
+getgenv().MCP_AUTH_TOKEN = "PASTE_THE_TOKEN_FROM_TERMUX_HERE"
 loadstring(game:HttpGet("http://localhost:16384/mobile-connector.luau"))("localhost:16384")
 ```
 
-Since both the server and the executor are on the same phone, it connects via localhost.
+Since both the server and the executor are on the same phone, it connects via localhost. The token is still required because the bridge is exposed through a public tunnel.
 
 ## Step 7: Use Custom AI AI (Built-in, No External AI Client Needed)
 
@@ -135,20 +142,17 @@ http://localhost:16384/ai
 
 You can still use Claude, ChatGPT, or Cursor via the tunnel URL if you prefer:
 
-### Claude Desktop / Claude Mobile
-```json
-{
-  "mcpServers": {
-    "roblox": {
-      "type": "http",
-      "url": "https://YOUR_TUNNEL_URL/mcp"
-    }
-  }
-}
-```
+### Claude Web, Desktop, or Mobile
+
+1. Open **Settings → Connectors → Add custom connector** in Claude.
+2. Enter `https://YOUR_TUNNEL_URL/mcp` as the server URL. Do **not** append `?token=`.
+3. Leave advanced OAuth settings empty, select **Add**, then select **Connect**.
+4. On the Roblox MCP sign-in page, enter the `MCP_AUTH_TOKEN` value you exported in Termux and authorize the connector.
+
+Claude discovers the server metadata, registers a connector client, and receives a short-lived OAuth access token. The server derives its OAuth origin from the incoming public request, so every temporary tunnel, custom domain, Railway deployment, and independent clone works without a repository-specific URL or OAuth client configuration. Follow the [Claude Remote Connector Guide](claude-connector.md) for deployment verification and troubleshooting.
 
 ### ChatGPT (Developer Mode)
-Add as a custom connector using the tunnel URL.
+Add the public `https://YOUR_TUNNEL_URL/mcp` endpoint using the OAuth-capable connector flow supported by your ChatGPT account. Do not share the long-lived `MCP_AUTH_TOKEN` in a URL.
 
 ## Step 8: Use It
 
@@ -160,9 +164,9 @@ Now you can chat with your AI assistant and it can:
 - Get game info and capabilities
 
 Ask things like:
-- "What game am I playing? Get the game info"
-- "Execute a script that gives me infinite jump"
-- "Search for all TextLabels in the game"
+- "Use Roblox MCP to call get-game-info. Do not make any changes."
+- "Use Roblox MCP to call list-clients. Do not make any changes."
+- "Search for all TextLabels in my own test experience."
 - "What capabilities does my executor have?"
 
 ## Quick Reference

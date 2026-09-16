@@ -1,5 +1,5 @@
 import { relayClients } from "../../../bridge/handlers/shared/communication.js";
-import { getActiveClients } from "../../../bridge/handlers/shared/registry.js";
+import { getActiveClients, getClientMonitoring } from "../../../bridge/handlers/shared/registry.js";
 import { getScriptSourceIndex } from "../../../bridge/handlers/shared/script-source-store.js";
 import { loadSemanticSettings, validateSemanticSettings } from "../../../semantic/settings.js";
 import { getSemanticIndexStats } from "../../../semantic/vector-index.js";
@@ -32,6 +32,11 @@ export async function GET(_req, res) {
                 jobId: c.jobId,
                 placeName: c.placeName,
                 transport: c.transport,
+                mobile: c.mobile ?? false,
+                executor: c.executor ?? null,
+                platform: c.platform ?? null,
+                capabilities: c.capabilities ?? null,
+                health: getClientMonitoring(c),
                 scriptSync: {
                     hasFinishedMapping: scriptIndex.hasFinishedMapping,
                     mappedSources: scriptIndex.mappedSources,

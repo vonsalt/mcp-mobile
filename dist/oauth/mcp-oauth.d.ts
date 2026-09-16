@@ -1,0 +1,15 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+export declare function getPublicBaseUrl(req: IncomingMessage): string;
+export declare function getMcpResourceUrl(req: IncomingMessage): string;
+export declare function oauthEnabled(): boolean;
+export declare function writeJson(res: ServerResponse, status: number, body: unknown, headers?: Record<string, string>): void;
+export declare function writeProtectedResourceMetadata(req: IncomingMessage, res: ServerResponse): void;
+export declare function writeAuthorizationServerMetadata(req: IncomingMessage, res: ServerResponse): void;
+export declare function registerClient(req: IncomingMessage, res: ServerResponse, requestBody: unknown): void;
+export declare function renderAuthorizationPage(req: IncomingMessage, res: ServerResponse, url: URL): void;
+export declare function approveAuthorization(req: IncomingMessage, res: ServerResponse, body: string): void;
+export declare function exchangeToken(req: IncomingMessage, res: ServerResponse, body: string): void;
+export declare function isValidMcpAccessToken(req: IncomingMessage, authorization: string | string[] | undefined): boolean;
+export declare function writeMcpUnauthorized(req: IncomingMessage, res: ServerResponse): void;
+export declare function getStaticAuthToken(): string | null;
+export declare function staticTokenMatches(value: string): boolean;

@@ -2,7 +2,7 @@ import { decompileBytecode } from "../../decompiler/run.js";
 import { loadDecompilerSettings } from "../../decompiler/settings.js";
 import { readJsonBody } from "../body.js";
 import { ensureConfiguredLocalDecompilerProvidersRunning } from "./api/decompiler-settings/setup.js";
-const LOCAL_PROVIDER_ENSURE_INTERVAL_MS = 10_000;
+const LOCAL_PROVIDER_ENSURE_INTERVAL_MS = 10000;
 let lastLocalProviderEnsureAt = 0;
 let localProviderEnsurePromise = null;
 function json(res, status, body) {
@@ -51,7 +51,7 @@ export async function POST(req, res) {
             bytecodeBase64,
             builtinAvailable: body.builtinAvailable === true,
             builtinSource: cleanString(body.builtinSource, 50 * 1024 * 1024),
-            builtinLatencyMs: cleanNumber(body.builtinLatencyMs, 0, 120_000),
+            builtinLatencyMs: cleanNumber(body.builtinLatencyMs, 0, 120000),
             clientId: cleanString(body.clientId, 160),
             requestedProvider: cleanString(body.requestedProvider, 80),
             disabledProviders: Array.isArray(body.disabledProviders) ? body.disabledProviders : undefined,

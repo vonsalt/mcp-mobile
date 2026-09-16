@@ -152,8 +152,6 @@ export function compileCustomDecompilerWorkflow(value) {
     if (byType("response").length > 1 || (responseIndex >= 0 && responseIndex !== requestIndex + 1)) {
         throw new Error("Legacy response blocks must connect directly after request.");
     }
-    // Older saved workflows had a separate response block. Treat it as a
-    // transparent connection so existing providers keep working when loaded.
     const effectiveTypes = types.filter((type) => type !== "response");
     const effectiveRequestIndex = effectiveTypes.indexOf("request");
     const beforeRequestNodes = chain

@@ -9,7 +9,6 @@ function escapeRegExp(value) {
 function compileQuery(query, literal, caseSensitive) {
     return new RegExp(literal ? escapeRegExp(query) : query, caseSensitive ? "" : "i");
 }
-/** Clamp an integer into [min, max] with a fallback for non-finite input. */
 function clampInt(value, fallback, min, max) {
     if (!Number.isFinite(value))
         return fallback;
@@ -26,8 +25,6 @@ function getLineBlock(lines, lineIndex, contextLines) {
     return block.join("\n");
 }
 function searchScripts(scripts, regex, options) {
-    // Clamp every numeric parameter so a single MCP call cannot flood context.
-    // (Mirrors the hard caps the HTTP /api/tool relay already enforces.)
     const limit = clampInt(options.limit, 10, 1, 100);
     const contextLines = clampInt(options.contextLines, 1, 0, 10);
     const maxMatchesPerScript = clampInt(options.maxMatchesPerScript, 3, 1, 50);
@@ -126,7 +123,6 @@ export default function register(server) {
             maxOutputChars: maxOutputCharsSchema,
         }),
     }, async (options) => {
-        // Secondary mode: script sources live on the primary, relay the request.
         if (isSecondaryRelay()) {
             return relayToolToApi("script-grep", {
                 query: options.query,

@@ -4,7 +4,7 @@ import { maxOutputCharsSchema } from "../../schemas.js";
 export default function register(server) {
     server.registerTool("get-game-info", {
         title: "Get information about the current Roblox game",
-        description: "Get current Roblox place and universe metadata such as PlaceId, GameId, and PlaceVersion.",
+        description: "Get current Roblox place and universe metadata such as PlaceId, GameId, PlaceVersion, creator info, and server type. Also includes the local player's identity and basic game state context. Call this first to understand what game the client is in before running other tools.",
         inputSchema: z.object({
             includeDescription: z
                 .boolean()

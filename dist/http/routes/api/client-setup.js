@@ -87,7 +87,6 @@ function runCommand(file, args, timeoutMs = COMMAND_TIMEOUT_MS, cwd, killProcess
                     child.kill(signal);
             }
             catch {
-                // The process already exited between the timeout and signal.
             }
             return Promise.resolve();
         };
@@ -190,7 +189,6 @@ function parseHarnessResults(output, targets) {
             }
         }
         catch {
-            // Ignore malformed progress lines; the caller supplies a failure fallback.
         }
     }
     return [...results.values()];

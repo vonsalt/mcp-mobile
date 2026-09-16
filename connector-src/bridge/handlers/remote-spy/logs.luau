@@ -1,134 +1,227 @@
 return function(_context, Bridge)
     Bridge:BindToType("ensure-remote-spy", function(data)
-        if getgenv().Cobalt then
+        -- Cobalt
+        if getgenv().CobaltInitialized then
             return {
-                status = "already_loaded",
-                message = "Cobalt remote spy is already running."
+                status = "ready",
+                mode = "cobalt",
+                message = "Cobalt remote spy is active.",
             }
         end
-
-        -- Load Cobalt
-        local success, err = pcall(function()
-            loadstring(game:HttpGet("https://github.com/notpoiu/cobalt/releases/latest/download/Cobalt.luau"))()
-        end)
-
-        if not success then
-            error("Failed to load Cobalt: " .. tostring(err))
+        -- Custom MCP spy
+        if getgenv().MCP_CustomRemoteSpy then
+            return {
+                status = "ready",
+                mode = getgenv().MCP_CustomRemoteSpy.type or "custom",
+                message = "Custom remote spy is active.",
+            }
         end
-
-        -- Wait for Cobalt to initialize
-        local waitStart = os.clock()
-        while not getgenv().Cobalt and os.clock() - waitStart < 10 do
-            task.wait(0.1)
+        local monitor = getgenv().MCP_RemoteMonitor
+        if monitor then
+            return { status = "ready", message = "Remote Monitor is ready." }
         end
-
-        assert(getgenv().Cobalt, "Cobalt loaded but failed to initialize within 10 seconds.")
-        
-        return {
-            status = "loaded",
-            message = "Cobalt remote spy loaded successfully."
+        getgenv().MCP_RemoteMonitor = {
+            startedAt = os.time(),
+            scans = 0,
+            lastScanAt = nil,
         }
+        return { status = "ready", message = "Read-only Remote Monitor is ready." }
     end)
 
     Bridge:BindToType("get-remote-spy-logs", function(data)
-        local Cobalt = getgenv().Cobalt
-        assert(Cobalt and Cobalt.shared and Cobalt.shared.Logs, "Cobalt remote spy is not loaded. Call ensure-remote-spy first.")
-
-        local direction = data.direction or "Both"
         local nameFilter = data.remoteNameFilter or ""
         local limit = math.max(1, math.min(tonumber(data.limit) or 10, 100))
-        local maxCallsPerRemote = math.max(0, math.min(tonumber(data.maxCallsPerRemote) or 2, 20))
-        local summaryOnly = data.summaryOnly == true
-        local hasNameFilter = nameFilter ~= ""
+        local hasFilter = nameFilter ~= ""
+        local summaryOnly = data.summaryOnly ~= false
+        local dirFilter = data.direction or "Both"
+        local maxCPR = math.min(tonumber(data.maxCallsPerRemote) or 1, 20)
 
-        local function ProcessLogs(logTable, directionLabel)
-            local results = {}
+        -- 1. Cobalt (highest-fidelity spy, full argument capture)
+        if getgenv().CobaltInitialized then
+            local cobalt = getgenv().Cobalt
+            if cobalt and cobalt.shared and cobalt.shared.Logs then
+                local cobaltLogs = cobalt.shared.Logs
+                local results = {}
 
-            for instance, log in logTable do
-                if typeof(instance) ~= "Instance" then continue end
-                if #results >= limit then break end
-
-                local remoteName = ""
-                local remoteClass = ""
-                pcall(function()
-                    remoteName = instance.Name
-                    remoteClass = instance.ClassName
-                end)
-
-                -- Apply name filter
-                if hasNameFilter and not string.find(string.lower(remoteName), string.lower(nameFilter), 1, true) then
-                    continue
-                end
-
-                -- Get recent calls (raw — LuaEncode handles serialization)
-                local recentCalls = {}
-                local totalCalls = #log.Calls
-                local startIdx = math.max(1, totalCalls - maxCallsPerRemote + 1)
-
-                if not summaryOnly then
-                    for i = startIdx, totalCalls do
-                        local call = log.Calls[i]
-                        if not call then continue end
-
-                        table.insert(recentCalls, {
-                            Index = i,
-                            Arguments = call.Arguments,
-                            Origin = call.Origin,
-                            IsExecutor = call.IsExecutor or false,
-                            IsActor = call.IsActor or false,
-                            Line = call.Line,
-                        })
+                local function processCobaltCategory(category, direction)
+                    for _, log in pairs(category) do
+                        if #results >= limit then break end
+                        local ok, remoteName = pcall(function() return log.Instance.Name end)
+                        if not ok then remoteName = "unknown" end
+                        if not hasFilter or string.find(string.lower(tostring(remoteName)), string.lower(nameFilter), 1, true) then
+                            local ok2, fullPath = pcall(function() return log.Instance:GetFullName() end)
+                            local ok3, className = pcall(function() return log.Instance.ClassName end)
+                            local recentCalls = nil
+                            if not summaryOnly and #log.Calls > 0 then
+                                recentCalls = {}
+                                for i = math.max(1, #log.Calls - maxCPR + 1), #log.Calls do
+                                    local call = log.Calls[i]
+                                    if call then
+                                        local entry = {
+                                            Arguments = call.Arguments,
+                                            Line = call.Line,
+                                            Source = call.Source,
+                                        }
+                                        if call.InvokeResult then
+                                            entry.InvokeResult = call.InvokeResult
+                                        end
+                                        table.insert(recentCalls, entry)
+                                    end
+                                end
+                            end
+                            table.insert(results, {
+                                RemoteName = tostring(remoteName),
+                                RemoteClass = ok3 and className or "RemoteEvent",
+                                Direction = direction,
+                                Method = "cobalt",
+                                TotalCalls = #log.Calls,
+                                Ignored = log.Ignored or false,
+                                Blocked = log.Blocked or false,
+                                RecentCalls = recentCalls,
+                                Path = ok2 and fullPath or tostring(remoteName),
+                            })
+                        end
                     end
                 end
 
-                table.insert(results, {
-                    RemoteName = remoteName,
-                    RemoteClass = remoteClass,
-                    Direction = directionLabel,
-                    Method = log.Method,
-                    TotalCalls = totalCalls,
-                    Ignored = log.Ignored,
-                    Blocked = log.Blocked,
-                    RecentCalls = if summaryOnly then nil else recentCalls,
-                })
-            end
+                if dirFilter == "Both" or dirFilter == "Outgoing" then
+                    processCobaltCategory(cobaltLogs.Outgoing or {}, "Outgoing")
+                end
+                if dirFilter == "Both" or dirFilter == "Incoming" then
+                    processCobaltCategory(cobaltLogs.Incoming or {}, "Incoming")
+                end
 
-            return results
-        end
-
-        local allResults = {}
-
-        if direction == "Outgoing" or direction == "Both" then
-            local outgoing = ProcessLogs(Cobalt.shared.Logs.Outgoing, "Outgoing")
-            for _, r in outgoing do
-                table.insert(allResults, r)
+                return {
+                    count = #results,
+                    results = results,
+                    mode = "cobalt",
+                    message = "Cobalt remote spy data.",
+                }
             end
         end
 
-        if direction == "Incoming" or direction == "Both" then
-            local incoming = ProcessLogs(Cobalt.shared.Logs.Incoming, "Incoming")
-            for _, r in incoming do
-                table.insert(allResults, r)
+        -- 2. Custom MCP spy (user-injected standard interface)
+        local customSpy = getgenv().MCP_CustomRemoteSpy
+        if customSpy and type(customSpy.getLogs) == "function" then
+            local ok, result = pcall(customSpy.getLogs, data)
+            if ok and result then return result end
+        end
+
+        -- 3. Hydroxide compat
+        local hydroxide = getgenv().Hydroxide
+        if hydroxide then
+            local remotes = hydroxide.remotes or hydroxide.Remotes
+            if remotes then
+                local results = {}
+                for remote, calls in pairs(remotes) do
+                    if #results >= limit then break end
+                    local ok, name = pcall(function() return remote.Name end)
+                    if not ok then name = "unknown" end
+                    if not hasFilter or string.find(string.lower(tostring(name)), string.lower(nameFilter), 1, true) then
+                        local ok2, fullPath = pcall(function() return remote:GetFullName() end)
+                        local recentCalls = nil
+                        if not summaryOnly and type(calls) == "table" then
+                            recentCalls = {}
+                            for i = math.max(1, #calls - maxCPR + 1), #calls do
+                                table.insert(recentCalls, calls[i])
+                            end
+                        end
+                        table.insert(results, {
+                            RemoteName = tostring(name),
+                            RemoteClass = ok2 and remote.ClassName or "RemoteEvent",
+                            Direction = "Outgoing",
+                            Method = "hydroxide",
+                            TotalCalls = type(calls) == "table" and #calls or 0,
+                            Ignored = false,
+                            Blocked = false,
+                            RecentCalls = recentCalls,
+                            Path = ok2 and fullPath or tostring(name),
+                        })
+                    end
+                end
+                return { count = #results, results = results, mode = "hydroxide", message = "Hydroxide remote spy data." }
             end
         end
 
-        -- Sort by total calls descending (most active remotes first)
-        table.sort(allResults, function(a, b)
-            return a.TotalCalls > b.TotalCalls
-        end)
-
-        -- Trim to limit
-        if #allResults > limit then
-            local trimmed = {}
-            for i = 1, limit do
-                trimmed[i] = allResults[i]
+        -- 4. Generic spy compat (RemoteSpy / RS / RemoteSpyLogs)
+        local genericSpy = getgenv().RemoteSpy or getgenv().RS or getgenv().RemoteSpyLogs
+        if genericSpy then
+            local logs = genericSpy.Logs or genericSpy.logs or genericSpy.Remotes or genericSpy.remotes
+            if logs and type(logs) == "table" then
+                local results = {}
+                for _, entry in ipairs(logs) do
+                    if #results >= limit then break end
+                    local remoteName = entry.Name or entry.RemoteName or entry.name or "unknown"
+                    if not hasFilter or string.find(string.lower(tostring(remoteName)), string.lower(nameFilter), 1, true) then
+                        table.insert(results, {
+                            RemoteName = tostring(remoteName),
+                            RemoteClass = entry.ClassName or entry.Class or "RemoteEvent",
+                            Direction = entry.Direction or entry.Type or "unknown",
+                            Method = "generic_spy",
+                            TotalCalls = entry.TotalCalls or entry.Calls or 1,
+                            Ignored = entry.Ignored or false,
+                            Blocked = entry.Blocked or false,
+                            RecentCalls = summaryOnly and nil or entry.Args or entry.arguments or nil,
+                            Path = entry.Path or entry.FullName or tostring(remoteName),
+                        })
+                    end
+                end
+                return { count = #results, results = results, mode = "generic_spy", message = "Generic remote spy data." }
             end
-            allResults = trimmed
         end
 
-        return {
-            count = #allResults,
-            results = allResults
-        }
+        -- 5. Built-in read-only inventory scanner fallback
+        local monitor = getgenv().MCP_RemoteMonitor
+        if monitor then
+            local results = {}
+            local function scanRemotes(parent, depth)
+                if #results >= limit * 3 then return end
+                if depth > 5 then return end
+                for _, child in parent:GetChildren() do
+                    if #results >= limit * 3 then break end
+                    if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") or child:IsA("UnreliableRemoteEvent") then
+                        local name = child.Name
+                        if not hasFilter or string.find(string.lower(name), string.lower(nameFilter), 1, true) then
+                            local fullName = ""
+                            pcall(function() fullName = child:GetFullName() end)
+                            table.insert(results, {
+                                RemoteName = name,
+                                RemoteClass = child.ClassName,
+                                Direction = "unknown",
+                                Method = "basic_mode",
+                                TotalCalls = 0,
+                                Ignored = false,
+                                Blocked = false,
+                                RecentCalls = nil,
+                                Path = fullName,
+                            })
+                        end
+                    end
+                    scanRemotes(child, depth + 1)
+                end
+            end
+
+            for _, serviceName in {"ReplicatedStorage", "Workspace", "Players"} do
+                pcall(function()
+                    scanRemotes(game:GetService(serviceName), 0)
+                end)
+            end
+
+            if #results > limit then
+                local trimmed = {}
+                for i = 1, limit do trimmed[i] = results[i] end
+                results = trimmed
+            end
+
+            monitor.scans += 1
+            monitor.lastScanAt = os.time()
+            return {
+                count = #results,
+                results = results,
+                mode = "inventory",
+                message = "Read-only remote inventory. Call telemetry is unavailable on this executor."
+            }
+        end
+        error("Remote Monitor is not initialised. Call ensure-remote-spy first.")
     end)
 end

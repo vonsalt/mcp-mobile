@@ -63,7 +63,6 @@ export default function register(server) {
             maxOutputChars: maxOutputCharsSchema,
         }),
     }, async ({ scriptGetterSource, scriptPath, startLine, endLine, maxLines, maxOutputChars }) => {
-        // Secondary mode: relay to primary which has the script source index.
         if (isSecondaryRelay()) {
             return relayToolToApi("get-script-content", {
                 ...(scriptGetterSource !== undefined ? { scriptGetterSource } : {}),

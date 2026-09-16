@@ -28,7 +28,6 @@ export default function register(server) {
                 const available = target.capabilities[name];
                 lines.push(`  ${available ? "[OK]" : "[--]"} ${name}`);
             }
-            // Determine which tools are likely to work
             lines.push("");
             lines.push("Tool Availability:");
             const caps = target.capabilities;
@@ -43,7 +42,8 @@ export default function register(server) {
                 { tool: "script-grep", available: !!caps.getscripts && !!caps.decompile },
                 { tool: "type-text-box", available: true },
                 { tool: "click-button", available: !!caps.firesignal || !!caps.VirtualInputManager },
-                { tool: "screenshot-window", available: !target.mobile },
+                { tool: "client-screenshot", available: !!caps.screenshot || !!caps.takescreenshot || !!caps.screenshot_protocol, reason: "requires screenshot(), takescreenshot(), or executor screenshot:// support" },
+                { tool: "screenshot-window", available: !target.mobile, reason: target.mobile ? "Use client-screenshot on mobile." : undefined },
                 { tool: "remote-spy", available: !!caps.loadstring },
             ];
             for (const { tool, available, reason } of toolChecks) {

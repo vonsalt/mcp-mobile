@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { describeResponse, sendAndWait } from "../../factory.js";
 import { maxOutputCharsSchema } from "../../schemas.js";
-const directionSchema = z.enum(["Incoming", "Outgoing"]);
 const inputSchema = z.discriminatedUnion("operation", [
     z.object({
         operation: z.literal("list"),
@@ -33,16 +32,11 @@ const inputSchema = z.discriminatedUnion("operation", [
     }),
     z.object({ operation: z.literal("clear") }),
     z.object({ operation: z.literal("status") }),
-    z.object({
-        operation: z.enum(["block", "unblock", "ignore", "unignore"]),
-        remoteName: z.string().describe("Exact remote name; use operation=list to discover candidates first"),
-        direction: directionSchema.describe("Direction of the captured remote"),
-    }),
 ]);
 export default function register(server) {
     server.registerTool("remote-spy", {
-        title: "Inspect and control Cobalt remote spy",
-        description: "Inspect and control Cobalt remote-spy state. Cobalt loads automatically. Use operation=list before changing a remote. block/unblock prevents or permits matching calls; ignore/unignore only changes whether matching calls are logged. Remote names are exact for state changes; list.nameFilter is a case-insensitive substring filter. Start with summaryOnly=true and small limits, then request arguments only for a narrowed remote.",
+        title: "Inspect remote inventory and activity",
+        description: "Read-only remote diagnostics. Lists active remote inventory and, when executor telemetry is available, recent call counts. It never invokes, blocks, edits, or replays remotes. Start with summaryOnly=true and a small limit, then narrow by name before requesting call arguments.",
         inputSchema,
     }, async (input) => {
         const maxOutputChars = input.operation === "list" ? input.maxOutputChars : undefined;

@@ -3,6 +3,16 @@ export type InstanceRole = "primary" | "secondary";
 export interface MobileCapabilities {
     [key: string]: boolean;
 }
+export interface ClientSessionAlert {
+    type: "session-change";
+    detectedAt: number;
+    previousPlaceId: number;
+    previousJobId: string;
+    previousPlaceName: string;
+    currentPlaceId: number;
+    currentJobId: string;
+    currentPlaceName: string;
+}
 export interface RobloxClient {
     clientId: string;
     sessionId?: string;
@@ -13,7 +23,13 @@ export interface RobloxClient {
     placeName: string;
     transport: "ws" | "http";
     ws?: WebSocket;
+    connectedAt: number;
+    lastRegistrationAt: number;
     lastHttpPoll: number;
+    registrationCount: number;
+    reconnectCount: number;
+    sessionChangeCount: number;
+    sessionAlerts: ClientSessionAlert[];
     pendingHttpCommands: string[];
     pendingPollResolve: ((commands: string[]) => void) | null;
     mobile?: boolean;

@@ -2,6 +2,8 @@
 
 This guide covers setting up the Roblox Executor MCP server to work with **mobile Roblox executors** (Delta, CodeX, VegaX, ArceusX, Cryptic, Ronix, etc.) on Android and iOS.
 
+> This is the local PC-and-phone workflow. For a public HTTPS deployment used with Claude Web or Mobile, follow the [Claude Remote Connector Guide](claude-connector.md).
+
 ## How It Works
 
 ```
@@ -132,10 +134,10 @@ Most mobile executors support an auto-execute feature. Add the loader script to 
 
 ## Tool Availability on Mobile
 
-Not all MCP tools work on mobile due to executor API limitations:
+Most MCP tools work on mobile with fallbacks when executor-specific functions are unavailable:
 
-| Tool | Works on Mobile? | Requirement |
-|------|-----------------|-------------|
+| Tool | Works on Mobile? | Notes |
+|------|-----------------|-------|
 | `list-clients` | Yes | — |
 | `get-client-capabilities` | Yes | — |
 | `execute` | Yes | `loadstring` + `setthreadidentity` |
@@ -145,12 +147,19 @@ Not all MCP tools work on mobile due to executor API limitations:
 | `search-instances` | Yes | `loadstring` |
 | `get-descendants-tree` | Yes | `loadstring` |
 | `type-text-box` | Yes | — |
-| `click-button` | Maybe | `firesignal` or `VirtualInputManager` |
-| `get-script-content` | Maybe | `decompile` or `getscriptbytecode` |
-| `script-grep` | Maybe | `getscripts` + `decompile` |
-| `screenshot-window` | No | Desktop only |
-| `semantic-search-scripts` | No | Requires decompilation |
-| `remote-spy` | Maybe | Depends on executor |
+| `click-button` | Yes | `firesignal` → `Activate()` → `VirtualInputManager` |
+| `get-script-content` | Yes | `decompile` → `script.Source` → `getscriptbytecode` |
+| `script-grep` | Yes | Works when script sources are available |
+| `screenshot-window` | Yes | Windows capture on desktop, client-side on mobile |
+| `client-screenshot` | Yes | Cross-platform viewport capture, AI sees the image |
+| `semantic-search-scripts` | Yes | Requires script sources + embedding service |
+| `remote-spy` | Yes | Cobalt full mode; basic inventory fallback |
+| `get-player-state` | Yes | Position, stats, inventory, nearby NPCs |
+| `get-game-guis` | Yes | Visible GUIs with buttons, labels, text boxes |
+| `trace-game-activity` | Yes | Observes state changes over a time window |
+| `find-game-systems` | Yes | Quest, shop, collection, submit, teleport, etc. |
+| `scan-anticheat` | Yes | Detects anti-cheat patterns in scripts and instances |
+| `anticheat-bypass` | Yes | Generates bypass code (requires hookmetamethod for hook-based mode) |
 
 ## Remote Access (Advanced)
 

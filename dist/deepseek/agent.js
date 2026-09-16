@@ -1,9 +1,6 @@
 import { getMcpClient } from "./mcp-client.js";
 import { DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, DEEPSEEK_MAX_TOKENS, } from "../config.js";
 const MAX_TOOL_ROUNDS = 8;
-/**
- * Fetch tool definitions from the MCP server and convert to DeepSeek/OpenAI format.
- */
 async function getTools() {
     const client = getMcpClient();
     if (!client)
@@ -21,9 +18,6 @@ async function getTools() {
         },
     }));
 }
-/**
- * Execute a single tool call via the MCP client.
- */
 async function executeTool(name, argsJson) {
     const client = getMcpClient();
     if (!client)
@@ -52,14 +46,6 @@ async function executeTool(name, argsJson) {
         return `Tool execution failed: ${err.message || err}`;
     }
 }
-/**
- * Run the DeepSeek + tool-calling agent loop.
- *
- * 1. Get MCP tools in OpenAI format
- * 2. Call DeepSeek chat/completions with messages + tools
- * 3. If the model wants to call tools, execute them and loop
- * 4. Return the final text response
- */
 export async function runAgentLoop(messages, apiKeyOverride, modelOverride) {
     const apiKey = apiKeyOverride || DEEPSEEK_API_KEY;
     if (!apiKey) {
@@ -74,7 +60,6 @@ export async function runAgentLoop(messages, apiKeyOverride, modelOverride) {
     const toolCallsMade = [];
     const workingMessages = [...messages];
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        // Call DeepSeek API
         const requestBody = {
             model,
             messages: workingMessages,
@@ -121,9 +106,7 @@ export async function runAgentLoop(messages, apiKeyOverride, modelOverride) {
         }
         const assistantMessage = choice.message;
         const toolCalls = assistantMessage.tool_calls;
-        // If there are tool calls, execute them and continue the loop
         if (toolCalls && toolCalls.length > 0) {
-            // Add assistant message with tool calls to conversation
             workingMessages.push({
                 role: "assistant",
                 content: assistantMessage.content || null,
@@ -133,7 +116,6 @@ export async function runAgentLoop(messages, apiKeyOverride, modelOverride) {
                     function: { name: tc.function.name, arguments: tc.function.arguments },
                 })),
             });
-            // Execute each tool call
             for (const tc of toolCalls) {
                 const toolName = tc.function.name;
                 const toolArgs = tc.function.arguments;
@@ -145,10 +127,8 @@ export async function runAgentLoop(messages, apiKeyOverride, modelOverride) {
                     content: result,
                 });
             }
-            // Continue loop — DeepSeek will process tool results
             continue;
         }
-        // No tool calls — we have the final answer
         const finalText = assistantMessage.content || "";
         return { content: finalText, toolCallsMade };
     }

@@ -29,7 +29,6 @@ export function startAsSecondary(relayUrl = `ws://localhost:${WS_PORT}/mcp-relay
     });
     socket.on("close", () => {
         setRelaySocket(null);
-        // Reject all pending resolvers so tool calls don't hang forever.
         for (const [id, resolver] of secondaryResponseResolvers.entries()) {
             resolver({ id, output: undefined });
         }
@@ -45,6 +44,5 @@ export function startAsSecondary(relayUrl = `ws://localhost:${WS_PORT}/mcp-relay
     });
     socket.on("error", (err) => {
         console.error("[Secondary] Relay socket error:", err.message);
-        // "error" is always followed by "close", so fallback is handled there.
     });
 }

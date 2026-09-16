@@ -1,279 +1,256 @@
 import { getMcpClient } from "./mcp-client.js";
-import {
-  CUSTOM_AI_API_KEY,
-  CUSTOM_AI_BASE_URL,
-  CUSTOM_AI_API_VERSION,
-  CUSTOM_AI_MODEL,
-  CUSTOM_AI_MAX_TOKENS,
-  CUSTOM_AI_THINKING_ENABLED,
-  CUSTOM_AI_THINKING_BUDGET,
-} from "../config.js";
-
+import { CUSTOM_AI_API_KEY, CUSTOM_AI_BASE_URL, CUSTOM_AI_API_VERSION, CUSTOM_AI_MODEL, CUSTOM_AI_MAX_TOKENS, CUSTOM_AI_THINKING_ENABLED, CUSTOM_AI_THINKING_BUDGET, CUSTOM_AI_AUTH_TYPE, CUSTOM_AI_AUTH_HEADER, CUSTOM_AI_BEARER_TOKEN, type CustomAiAuthType, } from "../config.js";
 const MAX_TOOL_ROUNDS = 10;
-
-// ── Types ──
-
 interface AnthropicTool {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
+    name: string;
+    description: string;
+    input_schema: Record<string, unknown>;
 }
-
 interface ContentBlock {
-  type: "text" | "tool_use" | "thinking";
-  text?: string;
-  id?: string;
-  name?: string;
-  input?: Record<string, unknown>;
-  thinking?: string;
+    type: "text" | "tool_use" | "thinking" | "image";
+    text?: string;
+    id?: string;
+    name?: string;
+    input?: Record<string, unknown>;
+    thinking?: string;
+    data?: string;
+    mimeType?: string;
 }
-
 interface AnthropicMessage {
-  role: "user" | "assistant";
-  content: string | ContentBlock[];
+    role: "user" | "assistant";
+    content: string | ContentBlock[];
 }
-
 export interface ToolCallInfo {
-  name: string;
-  input: string;
-  result: string;
+    name: string;
+    input: string;
+    result: string;
 }
-
 export interface ThinkingBlock {
-  text: string;
+    text: string;
 }
-
 export interface ChatResult {
-  content: string;
-  thinking: ThinkingBlock[];
-  toolCallsMade: ToolCallInfo[];
-  error?: string;
+    content: string;
+    thinking: ThinkingBlock[];
+    toolCallsMade: ToolCallInfo[];
+    error?: string;
 }
-
 export interface AgentConfig {
-  apiKey?: string;
-  baseUrl?: string;
-  apiVersion?: string;
-  model?: string;
-  maxTokens?: number;
-  thinkingEnabled?: boolean;
-  thinkingBudget?: number;
+    apiKey?: string;
+    baseUrl?: string;
+    apiVersion?: string;
+    model?: string;
+    maxTokens?: number;
+    thinkingEnabled?: boolean;
+    thinkingBudget?: number;
+    authType?: CustomAiAuthType;
+    bearerToken?: string;
+    authHeader?: string;
 }
-
-/**
- * Fetch tool definitions from the MCP server and convert to Anthropic format.
- */
 async function getTools(): Promise<AnthropicTool[]> {
-  const client = getMcpClient();
-  if (!client) return [];
-
-  const result = await client.listTools();
-  return result.tools.map((tool) => ({
-    name: tool.name,
-    description: tool.description || tool.title || "",
-    input_schema: (tool.inputSchema as Record<string, unknown>) || {
-      type: "object",
-      properties: {},
-    },
-  }));
-}
-
-/**
- * Execute a single tool call via the MCP client.
- */
-async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
-  const client = getMcpClient();
-  if (!client) return "Error: MCP client not connected.";
-
-  try {
-    const result = await client.callTool({ name, arguments: input });
-    if (result.isError) {
-      const texts = ((result.content || []) as any[])
-        .filter((c) => c.type === "text")
-        .map((c) => c.text);
-      return `Tool error: ${texts.join("\n") || "Unknown error"}`;
-    }
-    const texts = ((result.content || []) as any[])
-      .filter((c) => c.type === "text")
-      .map((c) => c.text);
-    return texts.join("\n") || "(no output)";
-  } catch (err) {
-    return `Tool execution failed: ${(err as Error).message || err}`;
-  }
-}
-
-/**
- * Build the messages endpoint URL from a base URL.
- * Handles bases that already include /v1 or not.
- */
-function buildMessagesUrl(baseUrl: string): string {
-  const base = baseUrl.replace(/\/+$/, "");
-  if (base.endsWith("/v1")) {
-    return base + "/messages";
-  }
-  if (base.endsWith("/messages")) {
-    return base;
-  }
-  return base + "/v1/messages";
-}
-
-/**
- * Run the Anthropic-compatible agent loop.
- *
- * 1. Get MCP tools in Anthropic format
- * 2. Call the Messages API with messages + tools
- * 3. If the model returns tool_use blocks, execute them and loop
- * 4. Return final text + any thinking blocks + tool call info
- */
-export async function runAgentLoop(
-  messages: AnthropicMessage[],
-  config: AgentConfig = {}
-): Promise<ChatResult> {
-  const apiKey = config.apiKey || CUSTOM_AI_API_KEY;
-  if (!apiKey) {
-    return {
-      content: "",
-      thinking: [],
-      toolCallsMade: [],
-      error: "No API key configured. Set CUSTOM_AI_API_KEY env var or provide a key in the chat UI Settings.",
-    };
-  }
-
-  const baseUrl = config.baseUrl || CUSTOM_AI_BASE_URL;
-  const apiVersion = config.apiVersion || CUSTOM_AI_API_VERSION;
-  const model = config.model || CUSTOM_AI_MODEL;
-  const maxTokens = config.maxTokens || CUSTOM_AI_MAX_TOKENS;
-  const thinkingEnabled = config.thinkingEnabled ?? CUSTOM_AI_THINKING_ENABLED;
-  const thinkingBudget = config.thinkingBudget || CUSTOM_AI_THINKING_BUDGET;
-
-  const tools = await getTools();
-  const toolCallsMade: ToolCallInfo[] = [];
-  const allThinking: ThinkingBlock[] = [];
-  const workingMessages = [...messages];
-
-  const messagesUrl = buildMessagesUrl(baseUrl);
-
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    // Build request body
-    const requestBody: Record<string, unknown> = {
-      model,
-      max_tokens: maxTokens,
-      messages: workingMessages,
-    };
-
-    if (tools.length > 0) {
-      requestBody.tools = tools;
-    }
-
-    // Extended thinking support
-    if (thinkingEnabled) {
-      requestBody.thinking = {
-        type: "enabled",
-        budget_tokens: Math.min(thinkingBudget, maxTokens - 1000),
-      };
-    }
-
-    let data: any;
-    try {
-      const resp = await fetch(messagesUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": apiVersion,
+    const client = getMcpClient();
+    if (!client)
+        return [];
+    const result = await client.listTools();
+    return result.tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description || tool.title || "",
+        input_schema: (tool.inputSchema as Record<string, unknown>) || {
+            type: "object",
+            properties: {},
         },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
+    }));
+}
+interface ToolExecResult {
+    textParts: string[];
+    imageBlocks: { data: string; mimeType: string }[];
+    isError: boolean;
+}
+async function executeTool(name: string, input: Record<string, unknown>): Promise<ToolExecResult> {
+    const client = getMcpClient();
+    if (!client)
+        return { textParts: ["Error: MCP client not connected."], imageBlocks: [], isError: true };
+    try {
+        const result = await client.callTool({ name, arguments: input });
+        const textParts: string[] = [];
+        const imageBlocks: { data: string; mimeType: string }[] = [];
+        for (const block of (result.content || []) as any[]) {
+            if (block.type === "text" && block.text) {
+                textParts.push(block.text);
+            } else if (block.type === "image" && block.data) {
+                imageBlocks.push({ data: block.data, mimeType: block.mimeType || "image/png" });
+            }
+        }
+        if (result.isError) {
+            return { textParts, imageBlocks, isError: true };
+        }
+        if (textParts.length === 0 && imageBlocks.length === 0) {
+            textParts.push("(no output)");
+        }
+        return { textParts, imageBlocks, isError: false };
+    }
+    catch (err) {
+        return { textParts: [`Tool execution failed: ${(err as Error).message || err}`], imageBlocks: [], isError: true };
+    }
+}
+function buildMessagesUrl(baseUrl: string): string {
+    const base = baseUrl.replace(/\/+$/, "");
+    if (base.endsWith("/v1")) {
+        return base + "/messages";
+    }
+    if (base.endsWith("/messages")) {
+        return base;
+    }
+    return base + "/v1/messages";
+}
+function buildAuthHeaders(config: AgentConfig): Record<string, string> {
+    const authType = config.authType || CUSTOM_AI_AUTH_TYPE;
+    const authHeader = config.authHeader || CUSTOM_AI_AUTH_HEADER;
+    const bearerToken = config.bearerToken || CUSTOM_AI_BEARER_TOKEN;
+    const apiKey = config.apiKey || CUSTOM_AI_API_KEY;
+    const headers: Record<string, string> = {};
+    if (authHeader) {
+        const token = bearerToken || apiKey;
+        if (token)
+            headers[authHeader] = token;
+        return headers;
+    }
+    if (authType === "bearer") {
+        const token = bearerToken || apiKey;
+        if (token)
+            headers["Authorization"] = `Bearer ${token}`;
+        return headers;
+    }
+    if (apiKey) {
+        headers["x-api-key"] = apiKey;
+        headers["anthropic-version"] = config.apiVersion || CUSTOM_AI_API_VERSION;
+    }
+    return headers;
+}
+export async function runAgentLoop(messages: AnthropicMessage[], config: AgentConfig = {}): Promise<ChatResult> {
+    const apiKey = config.apiKey || CUSTOM_AI_API_KEY;
+    const bearerToken = config.bearerToken || CUSTOM_AI_BEARER_TOKEN;
+    const authType = config.authType || CUSTOM_AI_AUTH_TYPE;
+    const hasBearer = authType === "bearer" && (bearerToken || apiKey);
+    if (!apiKey && !hasBearer) {
         return {
-          content: "",
-          thinking: allThinking,
-          toolCallsMade,
-          error: `API error (${resp.status}): ${errText.slice(0, 500)}`,
+            content: "",
+            thinking: [],
+            toolCallsMade: [],
+            error: "No API key configured. Set CUSTOM_AI_API_KEY env var or provide a key in the chat UI Settings.",
         };
-      }
-
-      data = await resp.json();
-    } catch (err) {
-      return {
+    }
+    const baseUrl = config.baseUrl || CUSTOM_AI_BASE_URL;
+    const apiVersion = config.apiVersion || CUSTOM_AI_API_VERSION;
+    const model = config.model || CUSTOM_AI_MODEL;
+    const maxTokens = config.maxTokens || CUSTOM_AI_MAX_TOKENS;
+    const thinkingEnabled = config.thinkingEnabled ?? CUSTOM_AI_THINKING_ENABLED;
+    const thinkingBudget = config.thinkingBudget || CUSTOM_AI_THINKING_BUDGET;
+    const tools = await getTools();
+    const toolCallsMade: ToolCallInfo[] = [];
+    const allThinking: ThinkingBlock[] = [];
+    const workingMessages = [...messages];
+    const messagesUrl = buildMessagesUrl(baseUrl);
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        const requestBody: Record<string, unknown> = {
+            model,
+            max_tokens: maxTokens,
+            messages: workingMessages,
+        };
+        if (tools.length > 0) {
+            requestBody.tools = tools;
+        }
+        if (thinkingEnabled) {
+            requestBody.thinking = {
+                type: "enabled",
+                budget_tokens: Math.min(thinkingBudget, maxTokens - 1000),
+            };
+        }
+        const authHeaders = buildAuthHeaders(config);
+        let data: any;
+        try {
+            const resp = await fetch(messagesUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...authHeaders,
+                },
+                body: JSON.stringify(requestBody),
+            });
+            if (!resp.ok) {
+                const errText = await resp.text();
+                return {
+                    content: "",
+                    thinking: allThinking,
+                    toolCallsMade,
+                    error: `API error (${resp.status}): ${errText.slice(0, 500)}`,
+                };
+            }
+            data = await resp.json();
+        }
+        catch (err) {
+            return {
+                content: "",
+                thinking: allThinking,
+                toolCallsMade,
+                error: `Failed to call AI API: ${(err as Error).message || err}`,
+            };
+        }
+        const contentBlocks: ContentBlock[] = data.content || [];
+        for (const block of contentBlocks) {
+            if (block.type === "thinking" && block.thinking) {
+                allThinking.push({ text: block.thinking });
+            }
+        }
+        const toolUseBlocks = contentBlocks.filter((b) => b.type === "tool_use");
+        if (toolUseBlocks.length > 0) {
+            workingMessages.push({
+                role: "assistant",
+                content: contentBlocks,
+            });
+            const toolResultBlocks: any[] = [];
+            for (const tu of toolUseBlocks) {
+                const toolName = tu.name || "";
+                const toolInput = tu.input || {};
+                const inputStr = JSON.stringify(toolInput);
+                const execResult = await executeTool(toolName, toolInput);
+                const resultText = execResult.textParts.join("\n");
+                toolCallsMade.push({ name: toolName, input: inputStr, result: resultText });
+                const resultContent: any[] = [{ type: "text", text: resultText }];
+                for (const img of execResult.imageBlocks) {
+                    resultContent.push({
+                        type: "image",
+                        source: {
+                            type: "base64",
+                            media_type: img.mimeType,
+                            data: img.data,
+                        },
+                    });
+                }
+                toolResultBlocks.push({
+                    type: "tool_result",
+                    tool_use_id: tu.id,
+                    content: resultContent,
+                    is_error: execResult.isError || undefined,
+                });
+            }
+            workingMessages.push({
+                role: "user",
+                content: toolResultBlocks,
+            });
+            continue;
+        }
+        const textBlocks = contentBlocks.filter((b) => b.type === "text");
+        const finalText = textBlocks.map((b) => b.text || "").join("\n");
+        return {
+            content: finalText,
+            thinking: allThinking,
+            toolCallsMade,
+        };
+    }
+    return {
         content: "",
         thinking: allThinking,
         toolCallsMade,
-        error: `Failed to call AI API: ${(err as Error).message || err}`,
-      };
-    }
-
-    const contentBlocks: ContentBlock[] = data.content || [];
-
-    // Extract thinking blocks
-    for (const block of contentBlocks) {
-      if (block.type === "thinking" && block.thinking) {
-        allThinking.push({ text: block.thinking });
-      }
-    }
-
-    // Check for tool_use blocks
-    const toolUseBlocks = contentBlocks.filter((b) => b.type === "tool_use");
-
-    if (toolUseBlocks.length > 0) {
-      // Add assistant message with all content blocks
-      workingMessages.push({
-        role: "assistant",
-        content: contentBlocks,
-      });
-
-      // Execute each tool call and build tool_result blocks
-      const toolResults: ContentBlock[] = [];
-      for (const tu of toolUseBlocks) {
-        const toolName = tu.name || "";
-        const toolInput = tu.input || {};
-        const inputStr = JSON.stringify(toolInput);
-        const result = await executeTool(toolName, toolInput);
-        toolCallsMade.push({ name: toolName, input: inputStr, result });
-
-        toolResults.push({
-          type: "tool_use" as any, // will be converted below
-          // We need to build a tool_result block
-        } as any);
-      }
-
-      // Build proper tool_result content for the user message
-      const toolResultBlocks = toolUseBlocks.map((tu) => {
-        const tc = toolCallsMade.find(
-          (c) => c.name === tu.name && c.input === JSON.stringify(tu.input)
-        );
-        return {
-          type: "tool_result",
-          tool_use_id: tu.id,
-          content: tc?.result || "(no output)",
-        };
-      });
-
-      workingMessages.push({
-        role: "user",
-        content: toolResultBlocks as any,
-      });
-
-      continue;
-    }
-
-    // No tool calls — extract final text
-    const textBlocks = contentBlocks.filter((b) => b.type === "text");
-    const finalText = textBlocks.map((b) => b.text || "").join("\n");
-
-    return {
-      content: finalText,
-      thinking: allThinking,
-      toolCallsMade,
+        error: `Reached maximum tool call rounds (${MAX_TOOL_ROUNDS}). The model may be stuck in a loop.`,
     };
-  }
-
-  return {
-    content: "",
-    thinking: allThinking,
-    toolCallsMade,
-    error: `Reached maximum tool call rounds (${MAX_TOOL_ROUNDS}). The model may be stuck in a loop.`,
-  };
 }
