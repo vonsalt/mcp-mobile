@@ -3,6 +3,7 @@ import { clientStampPrefix, sendAndWait, toolTextResponse } from "../../factory.
 import { isSecondaryRelay, relayToolToApi } from "../../factory.js";
 import { maxOutputCharsSchema } from "../../schemas.js";
 import { fetchScriptSearchIndex } from "./script-sources.js";
+import { exportTextToPasteVoid } from "../../../shared/paste-void.js";
 const DEFAULT_SCRIPT_MAX_LINES = 80;
 const HARD_SCRIPT_MAX_LINES = 2000;
 function normalizeMaxLines(maxLines) {
@@ -60,9 +61,14 @@ export default function register(server) {
                 .describe("Maximum lines to return (default: 80, max: 2000). Use explicit startLine/endLine ranges for large scripts.")
                 .optional()
                 .default(DEFAULT_SCRIPT_MAX_LINES),
+            exportToPasteVoid: z
+                .boolean()
+                .describe("Upload the full decompiled source to paste-void and include the raw URL in the response (useful when the source is too large to return inline).")
+                .optional()
+                .default(false),
             maxOutputChars: maxOutputCharsSchema,
         }),
-    }, async ({ scriptGetterSource, scriptPath, startLine, endLine, maxLines, maxOutputChars }) => {
+    }, async ({ scriptGetterSource, scriptPath, startLine, endLine, maxLines, exportToPasteVoid, maxOutputChars }) => {
         if (isSecondaryRelay()) {
             return relayToolToApi("get-script-content", {
                 ...(scriptGetterSource !== undefined ? { scriptGetterSource } : {}),
@@ -88,6 +94,14 @@ export default function register(server) {
             if (indexResult.ok) {
                 const storedScript = findStoredScript(indexResult.index.scripts, scriptPath, scriptProxyMatch?.[1]);
                 if (storedScript) {
+                    if (exportToPasteVoid) {
+                        const upload = await exportTextToPasteVoid(storedScript.source, storedScript.path.split("/").pop() || "decompiled-script");
+                        if (upload.ok && upload.url)
+                            return toolTextResponse(clientStampPrefix() +
+                                `Full source uploaded to paste-void: ${upload.url}\n\n` +
+                                formatSourceRange(storedScript.source, startLine, endLine, maxLines), { maxOutputChars });
+                        return toolTextResponse(`paste-void export failed: ${upload.error ?? "unknown error"}. Returning source inline.`, {}, true);
+                    }
                     return toolTextResponse(clientStampPrefix() +
                         formatSourceRange(storedScript.source, startLine, endLine, maxLines), {
                         maxOutputChars,
@@ -107,7 +121,7 @@ export default function register(server) {
                 endLine,
                 maxLines,
             };
-        return sendAndWait({
+        const result = await sendAndWait({
             type: "get-script-content",
             data,
             maxOutputChars,
@@ -115,5 +129,22 @@ export default function register(server) {
             truncationHint: "Rerun get-script-content with startLine/endLine or a smaller maxLines value.",
             failureMessage: () => "Failed to get script content.",
         });
+        if (!result.isError && exportToPasteVoid) {
+            try {
+                const text = result.content
+                    ?.filter((c) => c.type === "text")
+                    .map((c) => c.text)
+                    .join("");
+                if (text && text.includes("--")) {
+                    const upload = await exportTextToPasteVoid(text, scriptPath ?? "decompiled-script");
+                    if (upload.ok && upload.url)
+                        return toolTextResponse(`Full source uploaded to paste-void: ${upload.url}\n\n${text}`, { maxOutputChars });
+                }
+            }
+            catch {
+                // Export is best-effort; the inline result still stands.
+            }
+        }
+        return result;
     });
 }

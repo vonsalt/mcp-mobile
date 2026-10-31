@@ -1,19 +1,17 @@
 import { z } from "zod";
 import { sendFireAndForget, toolTextResponse } from "../../factory.js";
-
 const PASTE_API = "https://paste-void.lovable.app/api/paste";
-
 async function uploadToPaste(content, title) {
     const res = await fetch(PASTE_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, language: "lua", title }),
     });
-    if (!res.ok) throw new Error(`paste upload failed: ${res.status}`);
+    if (!res.ok)
+        throw new Error(`paste upload failed: ${res.status}`);
     const json = await res.json();
     return json.rawUrl;
 }
-
 function buildCaptureScript(duration, nameFilter) {
     const filter = nameFilter ? nameFilter.replace(/'/g, "\\'") : "";
     return `
@@ -120,12 +118,10 @@ task.delay(DURATION, function()
 end)
 `;
 }
-
 export default function register(server) {
     server.registerTool("remote-spy", {
         title: "Capture Roblox remote calls",
-        description:
-            "Captures remote calls (FireServer, InvokeServer) on the Roblox client. " +
+        description: "Captures remote calls (FireServer, InvokeServer) on the Roblox client. " +
             "Injects a spy script, captures for the given duration, uploads results to paste-void.lovable.app, " +
             "and prints the rawUrl to console. After the duration, call get-console-output and look for " +
             "'[MCP-SPY] Results' — that line contains the paste-void URL to fetch for full results.",
@@ -142,21 +138,18 @@ export default function register(server) {
         }),
     }, async ({ duration, nameFilter }) => {
         const script = buildCaptureScript(duration, nameFilter);
-
         let rawUrl;
         try {
             rawUrl = await uploadToPaste(script, "mcp-remote-spy");
-        } catch (err) {
+        }
+        catch (err) {
             return toolTextResponse(`Failed to upload capture script to paste-void: ${err}`, {}, true);
         }
-
         const loadstringSource = `setthreadidentity(8)\nloadstring(game:HttpGet("${rawUrl}"))()`;
-
         return sendFireAndForget({
             type: "execute",
             data: { source: loadstringSource },
-            successMessage:
-                `Remote spy injected (duration: ${duration}s${nameFilter ? `, filter: ${nameFilter}` : ""}). ` +
+            successMessage: `Remote spy injected (duration: ${duration}s${nameFilter ? `, filter: ${nameFilter}` : ""}). ` +
                 `After ${duration}s, call get-console-output and look for "[MCP-SPY] Results" — ` +
                 `that line has the paste-void rawUrl with all captured remote calls.`,
         });

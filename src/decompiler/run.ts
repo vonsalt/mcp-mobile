@@ -1,6 +1,7 @@
 import { DEFAULT_DECOMPILER_RUNTIME_SETTINGS, DEFAULT_PROVIDER_TIMEOUTS_MS, isCustomDecompilerProviderId, isDecompilerProviderId, type DecompilerProviderId, type DecompilerProviderSettings, type DecompilerRuntimeSettings, type DecompilerSettings, } from "./settings.js";
 import { getDecompilerProviderStatus, recordDecompilerProviderFailure, recordDecompilerProviderSuccess, shouldSkipDecompilerProvider, } from "./health.js";
 import { compileCustomDecompilerWorkflow } from "./custom-workflow.js";
+import { runVoidhubPipeline, type VoidhubProfile } from "./voidhub/pipeline.js";
 export interface DecompileInput {
     bytecodeBase64: string;
     builtinAvailable?: boolean;
@@ -50,6 +51,12 @@ function providerDisplayName(id: DecompilerProviderId, provider: DecompilerProvi
         return "Konstant";
     if (id === "fission")
         return "Fission";
+    if (id === "voidhub-structured")
+        return "VoidHub structured";
+    if (id === "voidhub-balanced")
+        return "VoidHub balanced";
+    if (id === "voidhub-disasm")
+        return "VoidHub disasm";
     if (isCustomDecompilerProviderId(id)) {
         const name = provider.options.name;
         return typeof name === "string" && name.trim()
@@ -57,6 +64,59 @@ function providerDisplayName(id: DecompilerProviderId, provider: DecompilerProvi
             : "custom provider";
     }
     return "built-in";
+}
+
+function isVoidhubProfile(id: string): id is "voidhub-structured" | "voidhub-balanced" | "voidhub-disasm" {
+    return id === "voidhub-structured" || id === "voidhub-balanced" || id === "voidhub-disasm";
+}
+
+function voidhubProfileFor(id: "voidhub-structured" | "voidhub-balanced" | "voidhub-disasm"): VoidhubProfile {
+    if (id === "voidhub-structured")
+        return "structured";
+    if (id === "voidhub-balanced")
+        return "balanced";
+    return "disasm";
+}
+
+/** In-process VoidHub decompiler — no network involved. */
+function runVoidhub(provider: DecompilerProviderSettings, bytecode: Buffer, id: "voidhub-structured" | "voidhub-balanced" | "voidhub-disasm", timeoutMs: number): Promise<ProviderRunResult> {
+    const startedAt = Date.now();
+    const configured = provider.options.profile;
+    const profile = typeof configured === "string" && (configured === "structured" || configured === "balanced" || configured === "disasm")
+        ? configured
+        : voidhubProfileFor(id);
+    return new Promise<ProviderRunResult>((resolve) => {
+        // The pipeline is synchronous CPU work; run it off the event loop so a
+        // very large chunk cannot stall the server, with the provider timeout
+        // as a hard stop.
+        const timer = setTimeout(() => {
+            resolve({
+                ok: false,
+                error: `VoidHub ${profile} profile timed out after ${Math.round(timeoutMs / 100) / 10}s.`,
+                timedOut: true,
+                latencyMs: Date.now() - startedAt,
+            });
+        }, timeoutMs);
+        setImmediate(() => {
+            clearTimeout(timer);
+            try {
+                const result = runVoidhubPipeline(bytecode, profile);
+                resolve({
+                    ok: result.ok,
+                    result: result.source,
+                    error: result.error,
+                    latencyMs: Date.now() - startedAt,
+                });
+            }
+            catch (error) {
+                resolve({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                    latencyMs: Date.now() - startedAt,
+                });
+            }
+        });
+    });
 }
 function providerLoad(id: DecompilerProviderId): ProviderLoadState {
     let load = providerLoadById.get(id);
@@ -487,6 +547,9 @@ async function runProvider(options: {
     }
     if (isCustomDecompilerProviderId(options.id)) {
         return runCustom(options.provider, options.bytecode, options.bytecodeBase64, options.timeoutMs);
+    }
+    if (isVoidhubProfile(options.id)) {
+        return runVoidhub(options.provider, options.bytecode, options.id, options.timeoutMs);
     }
     return {
         ok: false,

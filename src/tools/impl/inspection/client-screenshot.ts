@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { sendAndWait, clientStampPrefix } from "../../factory.js";
 import { maxOutputCharsSchema } from "../../schemas.js";
+import { isSupported as osScreenshotSupported, performScreenshot } from "../../../platform/windows-screenshot.js";
 
 interface ImageContent {
     type: "image";
@@ -45,6 +46,56 @@ function parseCaptureError(text: string): string | null {
     return null;
 }
 
+/** True when the client answered with a capture failure we can work around. */
+function parseCaptureErrorFromResult(result: { isError?: boolean; content?: unknown }): boolean {
+    if (result.isError)
+        return true;
+    try {
+        const text = (result.content as TextContent[] | undefined)
+            ?.filter((c) => c.type === "text")
+            .map((c) => c.text)
+            .join("");
+        if (!text)
+            return false;
+        if (/not supported by this executor|screenshot function|screenshot:\/\/|capture failed/i.test(text))
+            return true;
+        return parseCaptureError(text) !== null;
+    } catch {
+        return false;
+    }
+}
+
+/** Upload a base64 image to paste-void; returns the hosted URL. */
+async function exportImageToPasteVoid(base64: string, mimeType: string): Promise<{ ok: boolean; url?: string; error?: string }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+        const response = await fetch("https://paste-void.lovable.app/api/upload-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: `data:${mimeType};base64,${base64}` }),
+            signal: controller.signal,
+        });
+        const body = await response.text();
+        if (!response.ok)
+            return { ok: false, error: `paste-void returned HTTP ${response.status}` };
+        const parsed: unknown = body ? JSON.parse(body) : {};
+        if (parsed && typeof parsed === "object") {
+            const record = parsed as Record<string, unknown>;
+            for (const key of ["rawUrl", "url", "link", "imageUrl"]) {
+                const candidate = record[key];
+                if (typeof candidate === "string" && /^https?:\/\//.test(candidate))
+                    return { ok: true, url: candidate };
+            }
+        }
+        return { ok: false, error: "paste-void response did not include a URL" };
+    } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 export default function register(server: McpServer): void {
     server.registerTool("client-screenshot", {
         title: "Take a screenshot from the Roblox client (cross-platform)",
@@ -60,9 +111,14 @@ export default function register(server: McpServer): void {
                 .describe("JPEG/PNG quality percentage (default: 80, range 20-100).")
                 .optional()
                 .default(80),
+            exportToPasteVoid: z
+                .boolean()
+                .describe("Upload the captured screenshot to paste-void and include the hosted raw URL in the response.")
+                .optional()
+                .default(false),
             maxOutputChars: maxOutputCharsSchema,
         }),
-    }, async ({ maxWidth, quality, maxOutputChars }) => {
+    }, async ({ maxWidth, quality, exportToPasteVoid, maxOutputChars }) => {
         const result = await sendAndWait({
             type: "client-screenshot",
             data: { maxWidth, quality },
@@ -70,6 +126,34 @@ export default function register(server: McpServer): void {
             stampClient: true,
             failureMessage: () => "Failed to capture client screenshot. The connected executor may not support in-game screenshot capture.",
         });
+
+        // PC fallback: when the executor cannot capture in-game but this server
+        // runs on Windows, take an OS-level screenshot of the Roblox window
+        // instead of failing. The PC is perfectly capable of screenshots —
+        // only the executor API was missing.
+        const executorUnsupported = result.isError || parseCaptureErrorFromResult(result);
+        if (executorUnsupported && osScreenshotSupported()) {
+            try {
+                const osResult = performScreenshot(undefined, maxWidth);
+                if (osResult.imageBase64) {
+                    let notice = clientStampPrefix() +
+                        "In-game capture unavailable on this executor — captured the Roblox window with an OS-level screenshot instead.";
+                    if (exportToPasteVoid) {
+                        const upload = await exportImageToPasteVoid(osResult.imageBase64, osResult.mimeType ?? "image/jpeg");
+                        if (upload.ok && upload.url)
+                            notice += ` Hosted at: ${upload.url}`;
+                    }
+                    const content: ToolContent[] = [
+                        { type: "text", text: notice },
+                        { type: "image", data: osResult.imageBase64, mimeType: osResult.mimeType ?? "image/jpeg" },
+                    ];
+                    return { content };
+                }
+            }
+            catch {
+                // OS fallback failed — fall through to the original result.
+            }
+        }
 
         if (result.isError) {
             return result;
@@ -90,6 +174,16 @@ export default function register(server: McpServer): void {
                         const buf = await imgRes.arrayBuffer();
                         const b64 = Buffer.from(buf).toString("base64");
                         const mime = payload.mimeType ?? "image/png";
+                        if (exportToPasteVoid) {
+                            const upload = await exportImageToPasteVoid(b64, mime);
+                            if (upload.ok && upload.url)
+                                return {
+                                    content: [
+                                        { type: "text", text: `Screenshot captured and hosted at ${upload.url}` },
+                                        { type: "image", data: b64, mimeType: mime },
+                                    ] as ToolContent[],
+                                };
+                        }
                         return {
                             content: [
                                 { type: "text", text: `Screenshot captured and hosted at ${payload.imageUrl}` },
@@ -109,6 +203,16 @@ export default function register(server: McpServer): void {
 
         const image = text ? parseImageFromText(text) : null;
         if (image) {
+            if (exportToPasteVoid) {
+                const upload = await exportImageToPasteVoid(image.data, image.mimeType);
+                if (upload.ok && upload.url)
+                    return {
+                        content: [
+                            { type: "text", text: `In-game screenshot captured and hosted at ${upload.url}` },
+                            { type: "image", data: image.data, mimeType: image.mimeType },
+                        ],
+                    };
+            }
             const content: ToolContent[] = [
                 { type: "text", text: "In-game screenshot captured." },
                 { type: "image", data: image.data, mimeType: image.mimeType },

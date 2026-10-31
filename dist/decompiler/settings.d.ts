@@ -1,4 +1,4 @@
-export declare const DECOMPILER_PROVIDER_IDS: readonly ["builtin", "luaexpert", "shiny", "oracle", "konstant", "fission", "custom"];
+export declare const DECOMPILER_PROVIDER_IDS: readonly ["builtin", "luaexpert", "shiny", "oracle", "konstant", "fission", "custom", "voidhub-structured", "voidhub-balanced", "voidhub-disasm"];
 export type BuiltInDecompilerProviderId = (typeof DECOMPILER_PROVIDER_IDS)[number];
 export type CustomDecompilerProviderId = `custom:${string}`;
 export type DecompilerProviderId = BuiltInDecompilerProviderId | CustomDecompilerProviderId;

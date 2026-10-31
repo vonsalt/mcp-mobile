@@ -2,20 +2,18 @@ import fs from "fs";
 import { z } from "zod";
 import { sendFireAndForget, toolTextResponse } from "../../factory.js";
 import { threadContextSchema } from "../../schemas.js";
-
 const PASTE_API = "https://paste-void.lovable.app/api/paste";
-
 async function uploadToPaste(content) {
     const res = await fetch(PASTE_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, language: "lua", title: "mcp-execute" }),
     });
-    if (!res.ok) throw new Error(`paste upload failed: ${res.status}`);
+    if (!res.ok)
+        throw new Error(`paste upload failed: ${res.status}`);
     const json = await res.json();
     return json.rawUrl;
 }
-
 export default function register(server) {
     server.registerTool("execute-file", {
         title: "Execute a Luau file in the Roblox Game Client",
@@ -34,31 +32,29 @@ export default function register(server) {
     }, async ({ filePath, content, threadContext }) => {
         let code;
         let source;
-
         if (content) {
             code = content;
             source = "inline content";
-        } else if (filePath) {
+        }
+        else if (filePath) {
             if (!fs.existsSync(filePath)) {
                 return toolTextResponse(`File not found: ${filePath}`, {}, true);
             }
             code = fs.readFileSync(filePath, "utf-8");
             source = filePath;
-        } else {
+        }
+        else {
             return toolTextResponse("Provide either filePath or content.", {}, true);
         }
-
         let rawUrl;
         try {
             rawUrl = await uploadToPaste(code);
-        } catch (err) {
+        }
+        catch (err) {
             return toolTextResponse(`Failed to upload script to paste-void: ${err}`, {}, true);
         }
-
         console.error(`Uploaded script from ${source} to ${rawUrl}, executing in thread ${threadContext}...`);
-
         const loadstringSource = `setthreadidentity(${threadContext})\nloadstring(game:HttpGet("${rawUrl}"))()`;
-
         return sendFireAndForget({
             type: "execute",
             data: { source: loadstringSource },

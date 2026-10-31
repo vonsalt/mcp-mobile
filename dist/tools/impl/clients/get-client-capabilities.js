@@ -42,7 +42,7 @@ export default function register(server) {
                 { tool: "script-grep", available: !!caps.getscripts && !!caps.decompile },
                 { tool: "type-text-box", available: true },
                 { tool: "click-button", available: !!caps.firesignal || !!caps.VirtualInputManager },
-                { tool: "client-screenshot", available: !!caps.screenshot || !!caps.takescreenshot || !!caps.screenshot_protocol, reason: "requires screenshot(), takescreenshot(), or executor screenshot:// support" },
+                { tool: "client-screenshot", available: !!caps.screenshot || !!caps.takescreenshot || !!caps.screenshot_protocol, reason: "requires screenshot(), takescreenshot(), or executor screenshot:// support — on Windows the server falls back to an OS-level screenshot when the executor can't capture" },
                 { tool: "screenshot-window", available: !target.mobile, reason: target.mobile ? "Use client-screenshot on mobile." : undefined },
                 { tool: "remote-spy", available: !!caps.loadstring },
             ];

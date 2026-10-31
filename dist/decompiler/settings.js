@@ -11,6 +11,9 @@ export const DECOMPILER_PROVIDER_IDS = [
     "konstant",
     "fission",
     "custom",
+    "voidhub-structured",
+    "voidhub-balanced",
+    "voidhub-disasm",
 ];
 export const DECOMPILER_CONFIG_DIR = path.join(os.homedir(), ".roblox-mcp");
 export const DECOMPILER_SETTINGS_PATH = path.join(DECOMPILER_CONFIG_DIR, "decompiler-settings.json");
@@ -76,6 +79,30 @@ export const DECOMPILER_PROVIDER_INFO = [
         requiresApiKey: false,
         bodyFormat: "configurable",
     },
+    {
+        id: "voidhub-structured",
+        label: "VoidHub (structured)",
+        description: "Built-in multi-stage decompiler: bytecode -> CFG -> loop/conditional recovery -> Luau-style source. Runs in-process, no network. Best output of the VoidHub profiles.",
+        local: true,
+        requiresApiKey: false,
+        bodyFormat: "builtin",
+    },
+    {
+        id: "voidhub-balanced",
+        label: "VoidHub (balanced)",
+        description: "Built-in decompiler mid profile: bytecode -> CFG -> per-block pseudo-code. Faster than structured, always succeeds.",
+        local: true,
+        requiresApiKey: false,
+        bodyFormat: "builtin",
+    },
+    {
+        id: "voidhub-disasm",
+        label: "VoidHub (disasm)",
+        description: "Built-in annotated disassembly with constant folding. Fastest profile, ultimate fallback when every other provider fails.",
+        local: true,
+        requiresApiKey: false,
+        bodyFormat: "builtin",
+    },
 ];
 const DEFAULT_PROVIDERS = {
     builtin: {
@@ -136,6 +163,27 @@ const DEFAULT_PROVIDERS = {
             headers: {},
         },
     },
+    "voidhub-structured": {
+        enabled: true,
+        endpoint: "",
+        apiKey: "",
+        version: null,
+        options: { profile: "structured" },
+    },
+    "voidhub-balanced": {
+        enabled: true,
+        endpoint: "",
+        apiKey: "",
+        version: null,
+        options: { profile: "balanced" },
+    },
+    "voidhub-disasm": {
+        enabled: true,
+        endpoint: "",
+        apiKey: "",
+        version: null,
+        options: { profile: "disasm" },
+    },
 };
 export const DEFAULT_PROVIDER_TIMEOUTS_MS = {
     builtin: 8000,
@@ -145,6 +193,9 @@ export const DEFAULT_PROVIDER_TIMEOUTS_MS = {
     konstant: 10000,
     fission: 6000,
     custom: 10000,
+    "voidhub-structured": 15000,
+    "voidhub-balanced": 10000,
+    "voidhub-disasm": 8000,
 };
 export const DEFAULT_DECOMPILER_RUNTIME_SETTINGS = {
     adaptiveFallback: true,
@@ -157,12 +208,27 @@ export const DEFAULT_DECOMPILER_RUNTIME_SETTINGS = {
     providerTimeoutsMs: DEFAULT_PROVIDER_TIMEOUTS_MS,
 };
 export const DEFAULT_DECOMPILER_SETTINGS = {
-    providerOrder: ["builtin", "luaexpert", "shiny", "oracle", "konstant", "fission", "custom"],
+    providerOrder: [
+        "builtin",
+        "luaexpert",
+        "shiny",
+        "oracle",
+        "konstant",
+        "fission",
+        "custom",
+        "voidhub-structured",
+        "voidhub-balanced",
+        "voidhub-disasm",
+    ],
     providers: DEFAULT_PROVIDERS,
     runtime: DEFAULT_DECOMPILER_RUNTIME_SETTINGS,
 };
 function isObject(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+/** In-process decompiler providers — no endpoint or API key required. */
+function isVoidhubProviderId(value) {
+    return value === "voidhub-structured" || value === "voidhub-balanced" || value === "voidhub-disasm";
 }
 export function isCustomDecompilerProviderId(value) {
     return (value === "custom" ||
@@ -403,7 +469,7 @@ export function decompilerSettingsIssues(settings) {
         if (id === "oracle" && !provider.apiKey) {
             issues.push(`${label}: Authorization required. Add an Oracle API key before this provider can run.`);
         }
-        if (id !== "builtin" && !provider.endpoint.trim()) {
+        if (id !== "builtin" && !isVoidhubProviderId(id) && !provider.endpoint.trim()) {
             issues.push(`${label}: Endpoint required. Open provider settings and add a URL.`);
         }
         if (isCustomDecompilerProviderId(id) && provider.options.workflow !== undefined) {
