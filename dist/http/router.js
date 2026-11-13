@@ -23,6 +23,12 @@ export function requiresLocalAdmin(req, pathname) {
         return true;
     if (pathname === "/api/server-logs" && req.method === "DELETE")
         return true;
+    // Machine-level setup actions (spawn installers, write autoexec, install
+    // harnesses) must not be reachable through a reverse proxy, where the
+    // socket address is the proxy's — possibly loopback. GET stays public so
+    // the Connect modal works on hosted dashboards (see commit ac300c4).
+    if (pathname === "/api/client-setup" && req.method === "POST")
+        return true;
     return pathname === "/api/scripts/source" && req.method === "PUT";
 }
 async function walk(dir) {

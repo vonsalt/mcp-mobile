@@ -520,10 +520,11 @@ export async function GET(req: IncomingMessage, res: ServerResponse): Promise<vo
     json(res, 200, await setupPayload(req));
 }
 export async function POST(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    if (!isLocalRequest(req)) {
-        json(res, 403, { error: "Setup actions are only available from the local dashboard." });
-        return;
-    }
+    // Authorization is enforced at the router level (requiresLocalAdmin →
+    // isAuthorizedLocalAdminRequest): POST /api/client-setup requires the
+    // in-process local-admin token. The old socket-address check is gone
+    // because behind a reverse proxy the socket address is the proxy's,
+    // which can itself be loopback.
     let body: {
         action?: string;
         elevated?: boolean;
