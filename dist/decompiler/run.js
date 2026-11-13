@@ -52,22 +52,23 @@ function runVoidhub(provider, bytecode, id, timeoutMs) {
         ? configured
         : voidhubProfileFor(id);
     return new Promise((resolve) => {
-        // The pipeline is synchronous CPU work; run it off the event loop so a
-        // very large chunk cannot stall the server, with the provider timeout
-        // as a hard stop.
-        const timer = setTimeout(() => {
-            resolve({
-                ok: false,
-                error: `VoidHub ${profile} profile timed out after ${Math.round(timeoutMs / 100) / 10}s.`,
-                timedOut: true,
-                latencyMs: Date.now() - startedAt,
-            });
-        }, timeoutMs);
-        setImmediate(() => {
-            clearTimeout(timer);
+        let settled = false;
+        let timer;
+        const finish = (result) => {
+            if (settled)
+                return;
+            settled = true;
+            if (timer !== undefined)
+                clearTimeout(timer);
+            resolve(result);
+        };
+        // Fallback for environments where worker threads cannot spawn (e.g.
+        // bundled single-file deployments): run the pure-CPU pipeline on the
+        // main thread so behavior stays correct, just without preemption.
+        const runInline = () => {
             try {
                 const result = runVoidhubPipeline(bytecode, profile);
-                resolve({
+                finish({
                     ok: result.ok,
                     result: result.source,
                     error: result.error,
@@ -75,13 +76,72 @@ function runVoidhub(provider, bytecode, id, timeoutMs) {
                 });
             }
             catch (error) {
-                resolve({
+                finish({
                     ok: false,
                     error: error instanceof Error ? error.message : String(error),
                     latencyMs: Date.now() - startedAt,
                 });
             }
-        });
+        };
+        // The pipeline is synchronous CPU work; run it in a worker thread so
+        // a very large chunk cannot stall the server, with the provider
+        // timeout enforced by terminating the worker.
+        const runInWorker = async () => {
+            let workerModule;
+            try {
+                workerModule = await import("node:worker_threads");
+            }
+            catch {
+                runInline();
+                return;
+            }
+            // Copy the bytecode so transferring it does not detach the
+            // caller's buffer (other providers still need it).
+            const bytes = new Uint8Array(bytecode.byteLength);
+            bytes.set(bytecode);
+            let worker;
+            try {
+                worker = new workerModule.Worker(new URL("./voidhub/pipeline-worker.js", import.meta.url), {
+                    workerData: { bytecode: bytes, profile },
+                    transferList: [bytes.buffer],
+                });
+            }
+            catch {
+                runInline();
+                return;
+            }
+            // The worker must never keep the process alive on its own.
+            worker.unref();
+            let delivered = false;
+            timer = setTimeout(() => {
+                finish({
+                    ok: false,
+                    error: `VoidHub ${profile} profile timed out after ${Math.round(timeoutMs / 100) / 10}s.`,
+                    timedOut: true,
+                    latencyMs: Date.now() - startedAt,
+                });
+                void worker.terminate().catch(() => undefined);
+            }, timeoutMs);
+            worker.on("message", (result) => {
+                delivered = true;
+                finish({
+                    ok: result.ok,
+                    result: result.source,
+                    error: result.error,
+                    latencyMs: Date.now() - startedAt,
+                });
+            });
+            worker.on("error", () => {
+                // Worker could not run — fall back to the main thread.
+                if (!settled && !delivered)
+                    runInline();
+            });
+            worker.on("exit", () => {
+                if (!settled && !delivered)
+                    runInline();
+            });
+        };
+        void runInWorker().catch(() => runInline());
     });
 }
 function providerLoad(id) {
