@@ -1,11 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { DEEPSEEK_API_KEY, DEEPSEEK_MODEL } from "../../../config.js";
-
 export function GET(_req: IncomingMessage, res: ServerResponse): void {
-  const hasEnvKey = !!DEEPSEEK_API_KEY;
-  const defaultModel = DEEPSEEK_MODEL;
-
-  const html = `<!DOCTYPE html>
+    const hasEnvKey = !!DEEPSEEK_API_KEY;
+    const defaultModel = DEEPSEEK_MODEL;
+    const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -14,19 +12,6 @@ export function GET(_req: IncomingMessage, res: ServerResponse): void {
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  --bg: #0f0f0f;
-  --surface: #1a1a2e;
-  --surface2: #16213e;
-  --accent: #4f46e5;
-  --accent2: #6366f1;
-  --text: #e2e8f0;
-  --text-muted: #94a3b8;
-  --user-bg: #4f46e5;
-  --ai-bg: #1e293b;
-  --tool-bg: #1c2833;
-  --border: #334155;
-  --error: #ef4444;
-  --success: #10b981;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -463,7 +448,6 @@ document.getElementById('msg-input').focus();
 </script>
 </body>
 </html>`;
-
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-  res.end(html);
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(html);
 }

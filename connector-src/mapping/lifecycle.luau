@@ -333,7 +333,6 @@ local function StartScriptMapping(clientId)
     ScriptMappingPipeline.initialScanRunning = true
     local generation = ScriptMappingPipeline.generation
 
-    --// Map script sources \\--
     task.spawn(function()
         local ScriptsToQueue = {}
         local scanCompleted = false

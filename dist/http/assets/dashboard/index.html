@@ -154,6 +154,7 @@
                             </button>
                             <div class="no-client-add-menu" id="addClientMenu" role="menu" hidden>
                                 <button type="button" role="menuitem" data-add-client-kind="roblox">Roblox client</button>
+                                <button type="button" role="menuitem" data-add-client-kind="mobile">Mobile / Delta</button>
                                 <button type="button" role="menuitem" data-add-client-kind="mcp">MCP relay</button>
                                 <button type="button" role="menuitem" data-add-client-kind="harness">Harness</button>
                             </div>
@@ -166,6 +167,18 @@
                             </div>
                             <span>No clients connected</span>
                         </div>
+                    </div>
+                    <!-- Mobile quick-copy loadstring strip -->
+                    <div class="mobile-loadstring-strip" id="mobileLoadstringStrip" hidden>
+                        <div class="mobile-loadstring-label">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+                            Mobile loadstring
+                        </div>
+                        <pre class="mobile-loadstring-code" id="mobileLoadstringCode"></pre>
+                        <button class="mobile-loadstring-copy" id="mobileLoadstringCopy" type="button">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            Copy
+                        </button>
                     </div>
                 </div>
             </div>
@@ -181,10 +194,12 @@
                         <div class="overview-meta">
                             <h1 class="overview-username" id="overviewUsername">—</h1>
                             <p class="overview-place" id="overviewPlace">—</p>
+                            <a class="overview-profile-link" id="overviewProfileLink" href="#" target="_blank" rel="noopener">View Roblox Profile →</a>
                         </div>
                     </div>
                     <div class="overview-hero-right">
                         <div class="overview-transport" id="overviewTransport">WS</div>
+                        <div class="overview-executor" id="overviewExecutor" style="display:none"></div>
                     </div>
                 </div>
 
@@ -233,7 +248,102 @@
                             </div>
                         </div>
                     </div>
+                    <div class="status-tile">
+                        <div class="status-tile-header">
+                            <span class="status-tile-title">Script Sync Progress</span>
+                        </div>
+                        <div class="status-tile-body">
+                            <div class="sync-progress-container">
+                                <div class="sync-progress-bar">
+                                    <div class="sync-progress-fill" id="syncProgressFill" style="width:0%"></div>
+                                </div>
+                                <span class="sync-progress-text" id="scriptsSyncPerc">0%</span>
+                            </div>
+                            <div class="status-tile-stat" style="margin-top:6px">
+                                <span class="status-tile-stat-label">Scripts</span>
+                                <span class="status-tile-stat-value" id="scriptsSyncCount">0/0</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="status-tile">
+                        <div class="status-tile-header">
+                            <span class="status-tile-title">Semantic Index</span>
+                        </div>
+                        <div class="status-tile-body">
+                            <div class="sync-progress-container">
+                                <div class="sync-progress-bar">
+                                    <div class="sync-progress-fill" id="indexProgressFill" style="width:0%"></div>
+                                </div>
+                                <span class="sync-progress-text" id="scriptsIndexPerc">0%</span>
+                            </div>
+                            <div class="status-tile-stat" style="margin-top:6px">
+                                <span class="status-tile-stat-label">Chunks</span>
+                                <span class="status-tile-stat-value" id="scriptsChunkCount">0/0</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- ─── Live monitor workspace ───────────────── -->
+                <section class="monitor-shell" aria-label="Connector monitoring">
+                    <div class="monitor-heading">
+                        <div>
+                            <span class="monitor-eyebrow">LIVE CONNECTOR MONITOR</span>
+                            <h2>Session command center</h2>
+                            <p>Read-only connection health for the active Roblox client.</p>
+                        </div>
+                        <div class="monitor-live-state" id="monitorConnectionState"><span></span>Waiting for client</div>
+                    </div>
+
+                    <div class="monitor-metrics">
+                        <article class="monitor-metric-card monitor-metric-card--primary">
+                            <span>Session uptime</span>
+                            <strong id="monitorSessionUptime">—</strong>
+                            <small id="monitorLastSeen">No recent activity</small>
+                        </article>
+                        <article class="monitor-metric-card">
+                            <span>Reconnects</span>
+                            <strong id="monitorReconnects">0</strong>
+                            <small>Recorded by the bridge</small>
+                        </article>
+                        <article class="monitor-metric-card">
+                            <span>Server changes</span>
+                            <strong id="monitorSessionChanges">0</strong>
+                            <small>Observed, never blocked</small>
+                        </article>
+                        <article class="monitor-metric-card">
+                            <span>Current server</span>
+                            <strong class="monitor-job-id" id="monitorJobId">—</strong>
+                            <small id="monitorPlace">No place selected</small>
+                        </article>
+                    </div>
+
+                    <div class="monitor-grid">
+                        <article class="monitor-panel monitor-panel--alerts">
+                            <div class="monitor-panel-head">
+                                <div>
+                                    <span class="monitor-panel-kicker">SESSION ALERTS</span>
+                                    <h3>Server movement timeline</h3>
+                                </div>
+                                <span class="monitor-readonly">READ ONLY</span>
+                            </div>
+                            <div class="monitor-alert-list" id="monitorAlerts">
+                                <div class="monitor-empty-state">No session changes have been observed for this connector.</div>
+                            </div>
+                        </article>
+                        <article class="monitor-panel monitor-panel--snapshot">
+                            <div class="monitor-panel-head">
+                                <div>
+                                    <span class="monitor-panel-kicker">DIAGNOSTICS</span>
+                                    <h3>Capture context fast</h3>
+                                </div>
+                            </div>
+                            <p>Copy a compact read-only health snapshot, then use the MCP diagnostic tool in Claude for game, player, and console context.</p>
+                            <div class="monitor-snapshot-meta" id="monitorHealthNote">Waiting for connector telemetry.</div>
+                            <button class="monitor-copy-button" id="monitorCopySnapshot" type="button">Copy health snapshot</button>
+                        </article>
+                    </div>
+                </section>
             </div>
 
             <!-- ─── Server Logs view (home mode) ─────────────── -->
@@ -632,6 +742,47 @@
             </div>
         </main>
     </div>
+
+    <!-- Mobile bottom nav (shown ≤680px instead of sidebar) -->
+    <nav class="mobile-nav" id="mobileNav" aria-label="Navigation">
+        <div class="mobile-nav-home" id="mobileNavHome">
+            <button class="mobile-nav-item mobile-nav-item--active" data-view="clients">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>Clients</span>
+            </button>
+            <button class="mobile-nav-item" data-view="server">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>
+                <span>Server</span>
+            </button>
+            <button class="mobile-nav-item" data-view="server-logs">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                <span>Logs</span>
+            </button>
+            <button class="mobile-nav-item" data-view="settings">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Settings</span>
+            </button>
+        </div>
+        <div class="mobile-nav-client" id="mobileNavClient" style="display:none">
+            <button class="mobile-nav-item mobile-nav-item--active" data-view="overview">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                <span>Overview</span>
+            </button>
+            <button class="mobile-nav-item" data-view="scripts">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                <span>Scripts</span>
+            </button>
+            <button class="mobile-nav-item" data-view="tools">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span>Tools</span>
+            </button>
+            <button class="mobile-nav-item" id="mobileNavBackBtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                <span>Back</span>
+            </button>
+        </div>
+    </nav>
+
     <!-- Toast notifications -->
     <div class="toast-container" id="toastContainer"></div>
 
@@ -940,7 +1091,9 @@
         </div>
     </div>
 
+    <link rel="stylesheet" href="dashboard-experience.css">
     <script src="custom-provider-editor.js"></script>
     <script type="module" src="dashboard.js"></script>
+    <script type="module" src="dashboard-experience.js"></script>
 </body>
 </html>

@@ -51,6 +51,12 @@ test("router protects dashboard mutations without blocking relay APIs", () => {
   assert.equal(requiresLocalAdmin({ method: "PUT" }, "/api/scripts/source"), true);
   assert.equal(requiresLocalAdmin({ method: "GET" }, "/api/server-logs"), false);
   assert.equal(requiresLocalAdmin({ method: "DELETE" }, "/api/server-logs"), true);
+  // Setup actions are machine-level mutations: only the local dashboard (same
+  // loopback + in-process token) may POST them, even behind a reverse proxy.
+  // GET stays public so hosted dashboards (Railway) can render the Connect modal.
+  assert.equal(requiresLocalAdmin({ method: "GET" }, "/api/client-setup"), false);
+  assert.equal(requiresLocalAdmin({ method: "POST" }, "/api/client-setup"), true);
+  assert.equal(requiresLocalAdmin({ method: "PUT" }, "/api/client-setup"), false);
 });
 
 test("local admin API requests require the in-process token", () => {

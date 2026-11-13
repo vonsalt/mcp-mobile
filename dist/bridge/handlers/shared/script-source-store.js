@@ -185,9 +185,6 @@ export function upsertScriptSources(identity, input) {
             }
         }
     }
-    // Tombstones are status-bearing operations and must obey revision ordering.
-    // Source payloads may safely heal from stale same-session requests, but a
-    // stale removal must never delete a script that a newer revision re-added.
     if (revision.acceptsStatus && Array.isArray(input.removedScriptIds)) {
         for (const debugId of input.removedScriptIds) {
             if (typeof debugId !== "string" || debugId.length === 0 || debugId.length > 512)

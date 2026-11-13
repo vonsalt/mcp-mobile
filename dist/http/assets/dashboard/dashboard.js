@@ -1,7 +1,6 @@
 import { createClientSetup } from './client-setup.js';
 import { createThemeSettings } from './theme-settings.js';
 
-/* ── State ────────────────────────────────────────────────── */
 let selectedClientId = null;
 let currentView = 'clients';
 let dashboardMode = 'home'; // 'home' or 'client'
@@ -16,7 +15,6 @@ let decompilerRuntimeAdvancedOpen = false;
 
 let startTime = Date.now();
 
-/* ── DOM refs ────────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
 
 let dashboardAdminTokenPromise = null;
@@ -40,12 +38,9 @@ async function dashboardAdminToken() {
 
 async function dashboardApiFetch(input, init = {}, retryAuthorization = true) {
     const headers = new Headers(init.headers || {});
-    // Try local admin token first (works for localhost access)
     try {
         headers.set('X-Roblox-MCP-Admin-Token', await dashboardAdminToken());
     } catch {
-        // Local admin token unavailable (cloud/remote access)
-        // Fall back to Bearer token from localStorage if available
         const bearerToken = localStorage.getItem('mcp_auth_token');
         if (bearerToken) {
             headers.set('Authorization', 'Bearer ' + bearerToken);
@@ -57,7 +52,6 @@ async function dashboardApiFetch(input, init = {}, retryAuthorization = true) {
         return dashboardApiFetch(input, init, false);
     }
     if (response.status === 401 && retryAuthorization) {
-        // Auth failed — prompt user for bridge auth token
         const token = prompt('Bridge auth required. Enter your MCP_AUTH_TOKEN:');
         if (token) {
             localStorage.setItem('mcp_auth_token', token.trim());
@@ -287,13 +281,11 @@ function updateCodeOverflowHint() {
     scriptsCodeView.classList.toggle('has-overflow-x', hasOverflow && !atEnd);
 }
 
-// Dynamic right-edge overflow hint
 if (scriptsCodeView) scriptsCodeView.addEventListener('scroll', updateCodeOverflowHint);
 window.addEventListener('resize', updateCodeOverflowHint);
 
 let semanticIndexJobId = null;
 
-/* ── Helpers ──────────────────────────────────────────────── */
 function getInitials(name) { return name.slice(0, 2).toUpperCase(); }
 
 function escapeHtml(str) {
@@ -324,7 +316,6 @@ function avatarHtml(userId, name, size) {
 
 function transportClass(t) { return t === 'ws' ? 'transport-ws' : 'transport-http'; }
 
-/* ── Uptime ──────────────────────────────────────────────── */
 function updateUptime() {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
@@ -337,7 +328,6 @@ function updateUptime() {
 }
 setInterval(updateUptime, 1000);
 
-/* ── View switching ──────────────────────────────────────── */
 const allViews = () => [viewClients, viewOverview, viewTools, viewServer, viewSettings, viewServerLogs, viewScripts];
 
 function setSidebarMode(mode) {
@@ -345,6 +335,10 @@ function setSidebarMode(mode) {
     sidebarNavHome.style.display = mode === 'home' ? 'flex' : 'none';
     sidebarNavClient.style.display = mode === 'client' ? 'flex' : 'none';
     topbarBack.style.display = mode === 'client' ? 'inline-flex' : 'none';
+    const mobileNavHome = document.getElementById('mobileNavHome');
+    const mobileNavClient = document.getElementById('mobileNavClient');
+    if (mobileNavHome) mobileNavHome.style.display = mode === 'home' ? 'flex' : 'none';
+    if (mobileNavClient) mobileNavClient.style.display = mode === 'client' ? 'flex' : 'none';
 }
 
 function showView(name) {
@@ -375,7 +369,6 @@ function showView(name) {
         if (scriptsData.length > 0 && !scriptsViewingFile) renderScriptsBrowser();
     }
 
-    // Only animate on actual navigation, not on re-entry to the same view
     if (targetView && prevView !== name) {
         targetView.classList.add('view--entering');
         targetView.addEventListener('animationend', () => {
@@ -387,6 +380,15 @@ function showView(name) {
     activeNav.querySelectorAll('.sidebar-item').forEach(btn => {
         btn.classList.toggle('sidebar-item--active', btn.dataset.view === name);
     });
+
+    const mobileNavHome = document.getElementById('mobileNavHome');
+    const mobileNavClient = document.getElementById('mobileNavClient');
+    const activeMobileNav = dashboardMode === 'home' ? mobileNavHome : mobileNavClient;
+    if (activeMobileNav) {
+        activeMobileNav.querySelectorAll('.mobile-nav-item[data-view]').forEach(btn => {
+            btn.classList.toggle('mobile-nav-item--active', btn.dataset.view === name);
+        });
+    }
 }
 
 function bindSidebarNav(nav) {
@@ -396,6 +398,28 @@ function bindSidebarNav(nav) {
 }
 bindSidebarNav(sidebarNavHome);
 bindSidebarNav(sidebarNavClient);
+
+function bindMobileNav(nav) {
+    if (!nav) return;
+    nav.querySelectorAll('.mobile-nav-item[data-view]').forEach(btn => {
+        btn.addEventListener('click', () => showView(btn.dataset.view));
+    });
+}
+bindMobileNav(document.getElementById('mobileNavHome'));
+bindMobileNav(document.getElementById('mobileNavClient'));
+
+const mobileNavBackBtn = document.getElementById('mobileNavBackBtn');
+if (mobileNavBackBtn) {
+    mobileNavBackBtn.addEventListener('click', () => {
+        selectedClientId = null;
+        resetScriptsState();
+        clientSelectorName.textContent = 'Select Client';
+        clientSelectorAvatar.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>';
+        setSidebarMode('home');
+        showView('clients');
+        renderNoClientList('');
+    });
+}
 
 topbarBack.addEventListener('click', () => {
     selectedClientId = null;
@@ -407,7 +431,6 @@ topbarBack.addEventListener('click', () => {
     renderNoClientList('');
 });
 
-/* ── Client selector dropdown ────────────────────────────── */
 clientSelectorBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     clientDropdown.classList.toggle('open');
@@ -454,7 +477,6 @@ function renderDropdownClients(filter) {
     });
 }
 
-/* ── No-client picker list ───────────────────────────────── */
 noClientSearch.addEventListener('input', () => {
     renderNoClientList(noClientSearch.value.toLowerCase());
 });
@@ -481,10 +503,8 @@ function renderNoClientList(filter) {
     });
 }
 
-/* Add client setup lives in client-setup.js. */
 createClientSetup({ $, escapeHtml, showToast, dashboardApiFetch });
 
-/* ── Select client ───────────────────────────────────────── */
 function selectClient(clientId) {
     if (selectedClientId !== clientId) resetScriptsState();
     selectedClientId = clientId;
@@ -496,9 +516,9 @@ function selectClient(clientId) {
     setSidebarMode('client');
     showView('overview');
     updateOverview();
+    window.dispatchEvent(new CustomEvent('dashboard:client-selected', { detail: { clientId } }));
 }
 
-/* ── Update overview ─────────────────────────────────────── */
 function updateOverview() {
     const c = clients.find(x => x.clientId === selectedClientId);
     if (!c) return;
@@ -506,9 +526,30 @@ function updateOverview() {
     $('overviewUsername').textContent = c.username;
     $('overviewPlace').textContent = c.placeName;
     $('overviewClientId').textContent = c.clientId;
-    $('overviewPlaceId').textContent = c.placeId || '—';
-    $('overviewUserId').textContent = c.userId || '—';
-    $('overviewJobId').textContent = c.jobId || '—';
+    $('overviewPlaceId').textContent = c.placeId || 'â';
+    $('overviewUserId').textContent = c.userId || 'â';
+    $('overviewJobId').textContent = c.jobId || 'â';
+
+    const profileLink = $('overviewProfileLink');
+    if (profileLink) {
+        if (c.userId && c.userId > 0) {
+            profileLink.href = 'https://www.roblox.com/users/' + c.userId + '/profile';
+            profileLink.style.display = '';
+        } else {
+            profileLink.style.display = 'none';
+        }
+    }
+
+    const executorEl = $('overviewExecutor');
+    if (executorEl) {
+        const executorName = c.executorName || c.executor || c.capabilities?.executor;
+        if (executorName) {
+            executorEl.textContent = executorName;
+            executorEl.style.display = '';
+        } else {
+            executorEl.style.display = 'none';
+        }
+    }
 
     const oa = $('overviewAvatar');
     oa.innerHTML = avatarHtml(c.userId, c.username, 56);
@@ -518,6 +559,7 @@ function updateOverview() {
     ot.className = 'overview-transport ' + transportClass(c.transport);
 
     $('tileTransport').textContent = c.transport === 'ws' ? 'WebSocket' : 'HTTP Polling';
+    updateMonitor(c);
 
     const sync = c.scriptSync || { mappedSources: 0, sourcesToMap: 0, hasFinishedMapping: false };
     const mapped = Number(sync.mappedSources) || 0;
@@ -527,7 +569,6 @@ function updateOverview() {
     const hasCompleteSourceSync = sync.sourceIndexComplete === true;
     const ssv = $('scriptsSyncCount'); if (ssv) ssv.textContent = `${mapped}/${total}`;
     
-    // Update Sync Progress
     const syncPerc = total > 0 ? Math.round((mapped / total) * 100) : 0;
     const spv = $('scriptsSyncPerc'); if (spv) spv.textContent = `${syncPerc}%`;
     const spf = $('syncProgressFill'); if (spf) spf.style.width = `${syncPerc}%`;
@@ -556,7 +597,6 @@ function updateOverview() {
     const isFullyIndexed = chunkCount > 0 && embeddedChunks >= chunkCount;
     const scv = $('scriptsChunkCount'); if (scv) scv.textContent = `${embeddedChunks}/${chunkCount}`;
     
-    // Update Index Progress
     const indexPerc = chunkCount > 0 ? Math.round((embeddedChunks / chunkCount) * 100) : 0;
     const ipv = $('scriptsIndexPerc'); if (ipv) ipv.textContent = `${indexPerc}%`;
     const ipf = $('indexProgressFill'); if (ipf) ipf.style.width = `${indexPerc}%`;
@@ -567,7 +607,7 @@ function updateOverview() {
         } else if (isFullyIndexed && hasCompleteSourceSync) {
             semanticIndexStatus.textContent = 'Codebase fully indexed';
         } else if (isFullyIndexed && syncDone && sourceGap > 0) {
-            semanticIndexStatus.textContent = `Indexed received scripts · ${sourceGap} source ${sourceGap === 1 ? 'gap' : 'gaps'}`;
+            semanticIndexStatus.textContent = `Indexed received scripts Â· ${sourceGap} source ${sourceGap === 1 ? 'gap' : 'gaps'}`;
         } else {
             semanticIndexStatus.textContent = syncDone
                 ? `Ready to index ${mapped} scripts`
@@ -579,7 +619,78 @@ function updateOverview() {
     }
 }
 
-/* ── Render overview clients ─────────────────────────────── */
+function formatMonitorDuration(ms) {
+    const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+}
+
+function monitorSnapshotText(client) {
+    const health = client.health || {};
+    const alerts = Array.isArray(health.sessionAlerts) ? health.sessionAlerts : [];
+    const latest = alerts.length ? alerts[alerts.length - 1] : null;
+    const lines = [
+        'Roblox MCP health snapshot',
+        `Client: ${client.username || 'Unknown'}`,
+        `Place: ${client.placeName || 'Unknown'} (${client.placeId || 'â'})`,
+        `Job ID: ${client.jobId || 'Unknown'}`,
+        `Transport: ${(client.transport || 'unknown').toUpperCase()}`,
+        `Session uptime: ${formatMonitorDuration(health.sessionUptimeMs)}`,
+        `Idle time: ${formatMonitorDuration(health.idleMs)}`,
+        `Reconnects: ${Number(health.reconnectCount || 0)}`,
+        `Session changes: ${Number(health.sessionChangeCount || 0)}`,
+    ];
+    if (latest) lines.push(`Latest session change: ${latest.previousJobId || 'unknown'} -> ${latest.currentJobId || 'unknown'} at ${new Date(latest.detectedAt).toISOString()}`);
+    return lines.join('\n');
+}
+
+function updateMonitor(client) {
+    const health = client && client.health ? client.health : null;
+    if (!health) return;
+    const alerts = Array.isArray(health.sessionAlerts) ? health.sessionAlerts : [];
+    const hasAlerts = Number(health.sessionChangeCount || 0) > 0;
+    const state = $('monitorConnectionState');
+    if (state) {
+        state.className = 'monitor-live-state ' + (hasAlerts ? 'is-alert' : (health.currentSessionActive ? 'is-active' : ''));
+        state.innerHTML = '<span></span>' + (hasAlerts ? 'Session change observed' : (health.currentSessionActive ? 'Connector active' : 'Connector inactive'));
+    }
+    const uptime = $('monitorSessionUptime'); if (uptime) uptime.textContent = formatMonitorDuration(health.sessionUptimeMs);
+    const lastSeen = $('monitorLastSeen'); if (lastSeen) lastSeen.textContent = `Last bridge activity ${formatMonitorDuration(health.idleMs)} ago`;
+    const reconnects = $('monitorReconnects'); if (reconnects) reconnects.textContent = String(Number(health.reconnectCount || 0));
+    const changes = $('monitorSessionChanges'); if (changes) changes.textContent = String(Number(health.sessionChangeCount || 0));
+    const job = $('monitorJobId'); if (job) job.textContent = client.jobId ? client.jobId.slice(0, 18) + (client.jobId.length > 18 ? 'â¦' : '') : 'â';
+    const place = $('monitorPlace'); if (place) place.textContent = `${client.placeName || 'Unknown place'} Â· ${client.transport === 'ws' ? 'WebSocket' : 'HTTP polling'}`;
+    const healthNote = $('monitorHealthNote');
+    if (healthNote) healthNote.textContent = `Active for ${formatMonitorDuration(health.sessionUptimeMs)} Â· ${Number(health.registrationCount || 1)} registrations Â· ${client.executor || 'Unknown executor'}`;
+
+    const alertList = $('monitorAlerts');
+    if (alertList) {
+        if (!alerts.length) {
+            alertList.innerHTML = '<div class="monitor-empty-state">No session changes have been observed for this connector.</div>';
+        } else {
+            alertList.innerHTML = alerts.slice(-4).reverse().map(alert => {
+                const when = new Date(alert.detectedAt);
+                const from = `${alert.previousPlaceName || 'Unknown'} Â· ${alert.previousJobId || 'unknown'}`;
+                const to = `${alert.currentPlaceName || 'Unknown'} Â· ${alert.currentJobId || 'unknown'}`;
+                return `<div class="monitor-alert"><i class="monitor-alert-dot"></i><div class="monitor-alert-main"><strong>${escapeHtml(from)} â ${escapeHtml(to)}</strong><span>Server or place changed; the dashboard only recorded this event.</span></div><time>${escapeHtml(formatTime(when))}</time></div>`;
+            }).join('');
+        }
+    }
+}
+
+const monitorCopySnapshot = $('monitorCopySnapshot');
+if (monitorCopySnapshot) {
+    monitorCopySnapshot.addEventListener('click', () => {
+        const client = clients.find(c => c.clientId === selectedClientId);
+        if (!client) return showToast('Select a connected client first', 'error');
+        copyText(monitorSnapshotText(client), 'Health snapshot');
+    });
+}
+
 function renderOverviewClients() {
     const el = $('overviewClientsList');
     const count = $('overviewClientCount');
@@ -594,7 +705,7 @@ function renderOverviewClients() {
             <div class="section-client-avatar">${avatarHtml(c.userId, c.username, 32)}</div>
             <div class="section-client-info">
                 <div class="section-client-name">${c.username}</div>
-                <div class="section-client-meta">${c.placeName} · ${c.clientId.slice(0, 8)}…</div>
+                <div class="section-client-meta">${c.placeName} Â· ${c.clientId.slice(0, 8)}â¦</div>
             </div>
             <span class="section-client-transport ${transportClass(c.transport)}">${c.transport}</span>
         </div>`;
@@ -605,8 +716,6 @@ function renderOverviewClients() {
     });
 }
 
-
-/* ── Tools ───────────────────────────────────────────────── */
 const toolDefs = {
     'script-grep': {
         name: 'Script Grep',
@@ -711,16 +820,13 @@ function selectTool(toolKey) {
 
     activeTool = toolKey;
 
-    // Update Sidebar
     document.querySelectorAll('.tools-list-item').forEach(item => {
         item.classList.toggle('active', item.dataset.tool === toolKey);
     });
 
-    // Update Header
     $('toolExecName').textContent = def.name;
     $('toolExecDesc').textContent = def.desc;
 
-    // Reset Result
     $('toolOutputBody').textContent = 'Click Send to execute the tool';
     $('toolResponseStatus').textContent = '';
     $('toolResponseTime').textContent = '';
@@ -728,7 +834,6 @@ function selectTool(toolKey) {
     toolRunBtn.disabled = false;
     toolRunBtn.innerHTML = '<span>Send</span> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
 
-    // Build Form (Table Rows)
     if (def.fields.length === 0) {
         $('toolParamsBody').innerHTML = '<tr><td colspan="2" style="color:var(--text-tertiary);font-size:13px;padding:20px 32px;">No parameters required. Click Send to execute.</td></tr>';
     } else {
@@ -747,7 +852,6 @@ function selectTool(toolKey) {
     }
 }
 
-// Sidebar listeners
 document.querySelectorAll('.tools-list-item').forEach(item => {
     item.addEventListener('click', () => selectTool(item.dataset.tool));
 });
@@ -756,8 +860,8 @@ function formatProgress(job) {
     const total = Number(job.total) || 0;
     const completed = Number(job.completed) || 0;
     const percent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
-    const count = total > 0 ? `\n${completed}/${total} · ${percent}%` : '';
-    return `${job.message || 'Running…'}${count}`;
+    const count = total > 0 ? `\n${completed}/${total} Â· ${percent}%` : '';
+    return `${job.message || 'Runningâ¦'}${count}`;
 }
 
 function sleep(ms) {
@@ -766,7 +870,7 @@ function sleep(ms) {
 
 async function pollToolProgress(jobId, def) {
     const startTime = performance.now();
-    $('toolOutputBody').textContent = 'Initializing…';
+    $('toolOutputBody').textContent = 'Initializingâ¦';
     $('toolResponseStatus').textContent = 'Pending';
     $('toolResponseStatus').className = 'tool-res-badge';
     $('toolResponseTime').textContent = '';
@@ -833,7 +937,7 @@ async function pollOverviewIndexProgress(jobId) {
             return;
         }
 
-        semanticIndexStatus.textContent = formatProgress(job).replace('\n', ' · ');
+        semanticIndexStatus.textContent = formatProgress(job).replace('\n', ' Â· ');
         await sleep(750);
     }
 }
@@ -890,8 +994,7 @@ toolRunBtn.addEventListener('click', async () => {
     payload.clientId = selectedClientId;
 
     toolRunBtn.disabled = true;
-    toolRunBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="50" stroke-dashoffset="20"/></svg> Running…';
-
+    toolRunBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="50" stroke-dashoffset="20"/></svg> Runningâ¦';
 
     const startTime = performance.now();
     try {
@@ -929,12 +1032,10 @@ toolRunBtn.addEventListener('click', async () => {
     toolRunBtn.innerHTML = '<span>Send</span> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
 });
 
-/* ── CSS spin animation ──────────────────────────────────── */
 const spinStyle = document.createElement('style');
 spinStyle.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
 document.head.appendChild(spinStyle);
 
-/* ── Server logs ─────────────────────────────────────────── */
 let serverLogsLive = true;
 async function fetchServerLogs() {
     try {
@@ -947,7 +1048,6 @@ function renderServerLogs(entries) {
     const body = $('serverLogsTableBody');
     if (!entries.length) { body.innerHTML = '<div class="logs-empty">No server logs yet</div>'; return; }
     
-    // Preserve scroll position during live updates
     const savedScroll = body.scrollTop;
     const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 30;
     
@@ -963,7 +1063,6 @@ function renderServerLogs(entries) {
         </div>`;
     }).join('');
     
-    // Restore scroll: if user was near bottom, auto-scroll to bottom; otherwise preserve position
     if (wasAtBottom) {
         body.scrollTop = body.scrollHeight;
     } else {
@@ -981,7 +1080,6 @@ $('serverLogsLiveBtn').addEventListener('click', () => {
     btn.classList.toggle('logs-btn--live', serverLogsLive);
 });
 
-/* ── Scripts view ────────────────────────────────────────── */
 let scriptsData = [];
 let scriptsSearchQuery = '';
 let scriptsSearchRequestId = 0;
@@ -1111,7 +1209,6 @@ async function fetchScripts() {
         const data = await res.json();
         const newScripts = Array.isArray(data) ? data : (data.scripts || []);
         
-        // Update and re-render if count changed or if currently viewing the empty state
         if (newScripts.length !== scriptsData.length || (newScripts.length > 0 && $('scriptsFileList').querySelector('.logs-empty'))) {
             scriptsData = newScripts;
             if (scriptsSearchQuery) {
@@ -1301,7 +1398,6 @@ function codeMatchCountLabel(count) {
     return count + ' ' + (count === 1 ? 'match' : 'matches');
 }
 
-// Build tree from flat script list
 function buildScriptTree(scripts) {
     const root = { children: {}, scripts: [] };
     const displayInfo = buildScriptDisplayInfo(scripts);
@@ -1343,7 +1439,6 @@ function showFileMode() {
     $('scriptsCodeMode').style.display = 'none';
     scriptsViewingFile = null;
     
-    // Restore scroll position after a short delay to ensure DOM is updated
     setTimeout(() => {
         const list = $('scriptsFileList');
         if (list) list.scrollTop = scriptsScrollPos;
@@ -1371,7 +1466,6 @@ function setCodeTab(tab) {
         codeEl.removeEventListener('input', onCodeEditInput);
     }
     
-    // Show/hide save button
     scriptsCodeSaveBtn.style.display = isEdit ? '' : 'none';
 }
 
@@ -1399,7 +1493,6 @@ function renderBreadcrumb(fileName) {
 }
 
 function renderScriptsBrowser() {
-    // Ensure file mode is showing (but don't reset scriptsViewingFile or touch scroll)
     $('scriptsFileMode').style.display = '';
     $('scriptsFileMode').classList.remove('scripts-file-mode--search');
     $('scriptsCodeMode').style.display = 'none';
@@ -1411,7 +1504,6 @@ function renderScriptsBrowser() {
     const list = $('scriptsFileList');
     if (!list) return;
 
-    // Save current scroll before re-rendering
     const currentScroll = list.scrollTop;
 
     if (!node) {
@@ -1429,12 +1521,10 @@ function renderScriptsBrowser() {
 
     let html = '';
 
-    // ".." go up row
     if (scriptsBrowsePath.length > 0) {
         html += '<div class="scripts-frow scripts-frow--up" data-action="up"><div class="scripts-fname">' + FOLDER_ICON + '<span class="scripts-fname-text">..</span></div><div></div><div></div><div></div></div>';
     }
 
-    // Folders first
     for (const name of folderNames) {
         const count = countScriptsRecursive(node.children[name]);
         html += '<div class="scripts-frow scripts-frow--folder" data-folder="' + escapeHtml(name) + '">';
@@ -1445,7 +1535,6 @@ function renderScriptsBrowser() {
         html += '</div>';
     }
 
-    // Scripts
     for (const s of scripts) {
         html += '<div class="scripts-frow scripts-frow--file" data-debug-id="' + escapeHtml(s.debugId) + '" data-path="' + escapeHtml(s.path) + '">';
         html += '<div class="scripts-fname">' + FILE_ICON + '<span class="scripts-fname-text">' + escapeHtml(s.name) + '</span></div>';
@@ -1457,7 +1546,6 @@ function renderScriptsBrowser() {
 
     list.innerHTML = html;
     
-    // Restore scroll position
     list.scrollTop = currentScroll;
 }
 
@@ -1470,7 +1558,7 @@ function renderSearchFileHits(files, query) {
             const info = getScriptDisplayInfo(script);
             return '<button class="scripts-search-file" data-debug-id="' + escapeHtml(script.debugId) + '">' +
                 '<span class="scripts-search-file-name">' + FILE_ICON + '<span>' + highlightQuery(info.displayPath, query) + '</span></span>' +
-                '<span class="scripts-search-file-meta">' + script.lines + ' lines · ' + formatBytes(script.bytes) + '</span>' +
+                '<span class="scripts-search-file-meta">' + script.lines + ' lines Â· ' + formatBytes(script.bytes) + '</span>' +
                 '</button>';
         }).join('') +
         '</div>';
@@ -1540,10 +1628,10 @@ async function renderScriptsSearchResults() {
         const codeHits = Array.isArray(data.code) ? data.code : [];
         const codeMatchCount = Number(data.totalCodeMatches) || codeHits.reduce((sum, result) => sum + (Number(result.matchCount) || 0), 0);
         const total = fileHits.length + codeMatchCount;
-        const limited = data.limited ? ' · limited' : '';
+        const limited = data.limited ? ' Â· limited' : '';
         $('scriptsCount').textContent = total === 0
             ? '0 results'
-            : fileHits.length + ' files · ' + codeMatchCount + ' code' + limited;
+            : fileHits.length + ' files Â· ' + codeMatchCount + ' code' + limited;
 
         if (total === 0) {
             list.innerHTML = '<div class="logs-empty">No matching scripts</div>';
@@ -1602,9 +1690,7 @@ function openScriptFromSearch(debugId, lineNumber = null) {
     openScriptSource(debugId, lineNumber);
 }
 
-// Navigation clicks
 $('scriptsFileList').addEventListener('click', (e) => {
-    // Three-dot menu button clicks
     const menuBtn = e.target.closest('.scripts-menu-btn');
     if (menuBtn) {
         e.stopPropagation();
@@ -1633,14 +1719,12 @@ $('scriptsFileList').addEventListener('click', (e) => {
         return;
     }
     if (row.dataset.debugId) {
-        // Find the script to navigate to its parent folder first
         setBrowsePathForScript(row.dataset.debugId);
         if (scriptsSearchQuery) clearScriptsSearchState();
         openScriptSource(row.dataset.debugId);
     }
 });
 
-// Breadcrumb clicks
 $('scriptsBreadcrumb').addEventListener('click', (e) => {
     const btn = e.target.closest('.scripts-bc-seg');
     if (!btn || btn.classList.contains('scripts-bc-seg--current')) return;
@@ -1666,11 +1750,9 @@ function scrollScriptCodeToLine(lineNumber) {
     if (target) target.classList.add('scripts-code-gutter--target');
 }
 
-// Inline code viewer
 async function openScriptSource(debugId, lineNumber = null) {
     if (!selectedClientId) return;
     
-    // Save current scroll position before switching to code mode
     const list = $('scriptsFileList');
     if (list) scriptsScrollPos = list.scrollTop;
 
@@ -1682,26 +1764,21 @@ async function openScriptSource(debugId, lineNumber = null) {
         scriptsViewingFile = debugId;
         const lines = data.source.split('\n');
 
-        // Track whether this script has embeddings
         const scriptMeta = scriptsData.find(s => s.debugId === debugId);
         scriptsViewingFileHasEmbeddings = scriptMeta ? !!scriptMeta.hasEmbeddings : false;
         const displayInfo = scriptMeta ? getScriptDisplayInfo(scriptMeta) : null;
         const fileName = displayInfo ? displayInfo.name : ensureLuauFileName(scriptPathParts(data.path).pop() || 'script');
 
-        // Update breadcrumb to show file
         renderBreadcrumb(fileName);
 
-        // Update code info bar
-        $('scriptsCodeInfo').textContent = lines.length + ' lines (' + lines.filter(l => l.trim()).length + ' loc) · ' + formatBytes(data.source.length);
+        $('scriptsCodeInfo').textContent = lines.length + ' lines (' + lines.filter(l => l.trim()).length + ' loc) Â· ' + formatBytes(data.source.length);
 
-        // Build line number gutter
         let gutterHtml = '';
         for (let i = 1; i <= lines.length; i++) {
             gutterHtml += '<span>' + i + '</span>';
         }
         $('scriptsCodeGutter').innerHTML = gutterHtml;
 
-        // Set code and highlight
         const codeEl = $('scriptsCodeBody');
         codeEl.textContent = data.source;
         codeEl.className = 'language-lua';
@@ -1723,14 +1800,12 @@ async function openScriptSource(debugId, lineNumber = null) {
     }
 }
 
-/* ── Code viewer tab switching ───────────────────────────── */
 document.querySelectorAll('.scripts-code-tab').forEach(tab => {
     tab.addEventListener('click', () => {
         setCodeTab(tab.dataset.tab);
     });
 });
 
-/* ── Cursor preservation helpers ───────────────────────────── */
 function saveCaret(el) {
     const sel = window.getSelection();
     if (!sel.rangeCount) return null;
@@ -1769,7 +1844,6 @@ function onCodeEditInput() {
     const codeEl = $('scriptsCodeBody');
     clearTimeout(codeEditDebounce);
 
-    // Update line count gutter
     syncGutterFromCode();
     
     codeEditDebounce = setTimeout(() => {
@@ -1793,15 +1867,14 @@ function syncGutterFromCode() {
         html += '<span>' + i + '</span>';
     }
     $('scriptsCodeGutter').innerHTML = html;
-    $('scriptsCodeInfo').textContent = lines.length + ' lines (' + lines.filter(l => l.trim()).length + ' loc) · ' + formatBytes(text.length);
+    $('scriptsCodeInfo').textContent = lines.length + ' lines (' + lines.filter(l => l.trim()).length + ' loc) Â· ' + formatBytes(text.length);
 }
 
-/* ── Save button ───────────────────────────────────────────── */
 scriptsCodeSaveBtn.addEventListener('click', async () => {
     const codeEl = $('scriptsCodeBody');
     const source = codeEl.textContent || '';
     scriptsCodeSaveBtn.disabled = true;
-    scriptsCodeSaveBtn.textContent = 'Saving…';
+    scriptsCodeSaveBtn.textContent = 'Savingâ¦';
     try {
         const res = await dashboardApiFetch('/api/scripts/source', {
             method: 'PUT',
@@ -1816,8 +1889,7 @@ scriptsCodeSaveBtn.addEventListener('click', async () => {
         if (res.ok) {
             showToast('Source saved', 'success');
             $('scriptsCodeInfo').textContent =
-                data.lines + ' lines (' + source.split('\n').filter(l => l.trim()).length + ' loc) · ' + formatBytes(data.bytes);
-            // Update the script in scriptsData so hasEmbeddings stays in sync
+                data.lines + ' lines (' + source.split('\n').filter(l => l.trim()).length + ' loc) Â· ' + formatBytes(data.bytes);
             const script = scriptsData.find(s => s.debugId === scriptsViewingFile);
             if (script) {
                 script.lines = data.lines;
@@ -1833,7 +1905,6 @@ scriptsCodeSaveBtn.addEventListener('click', async () => {
     scriptsCodeSaveBtn.textContent = 'Save';
 });
 
-/* ── Code viewer three-dot menu ──────────────────────────── */
 function updateCodeMenuReindex() {
     const item = scriptsCodeMenu.querySelector('[data-action="reindex"]');
     if (item) {
@@ -1868,7 +1939,6 @@ scriptsCodeMenu.addEventListener('click', (e) => {
     }
 });
 
-/* ── File row context menu ───────────────────────────────── */
 let activeFileMenuDebugId = null;
 
 function clampMenuPosition(value, min, max) {
@@ -1908,7 +1978,6 @@ function showFileContextMenu(btn) {
     const debugId = row.dataset.debugId;
     activeFileMenuDebugId = debugId;
 
-    // Always show re-index, but change label based on index status
     const script = scriptsData.find(s => s.debugId === debugId);
     const reindexItem = scriptsFileMenu.querySelector('[data-action="reindex"]');
     if (reindexItem) {
@@ -1916,7 +1985,6 @@ function showFileContextMenu(btn) {
         reindexItem.textContent = (script && script.hasEmbeddings) ? 'Re-index' : 'Index';
     }
 
-    // Close code menu if open
     scriptsCodeMenu.classList.remove('open');
 
     positionFileContextMenu(btn);
@@ -1927,7 +1995,6 @@ function closeFileMenu() {
     activeFileMenuDebugId = null;
 }
 
-// File menu item clicks
 scriptsFileMenu.addEventListener('click', (e) => {
     const item = e.target.closest('.scripts-menu-item');
     if (!item || !activeFileMenuDebugId) return;
@@ -1945,7 +2012,6 @@ scriptsFileMenu.addEventListener('click', (e) => {
     }
 });
 
-// Click outside to close menus
 document.addEventListener('click', (e) => {
     if (!scriptsCodeMenuBtn.contains(e.target) && !scriptsCodeMenu.contains(e.target)) {
         scriptsCodeMenu.classList.remove('open');
@@ -1957,8 +2023,6 @@ document.addEventListener('click', (e) => {
 window.addEventListener('resize', closeFileMenu);
 window.addEventListener('scroll', closeFileMenu, true);
 
-
-/* ── Server graph ────────────────────────────────────────── */
 let lastGraphKey = '';
 
 function layoutGraphSide(count, side, w, h, makeNode) {
@@ -2048,9 +2112,7 @@ function renderServerGraph() {
         const dx = n.side==='l' ? (cx-n.x)*0.4 : (n.x-cx)*0.4;
         const c1x = n.side==='l' ? n.x+dx : cx+dx, c2x = n.side==='l' ? cx-dx : n.x-dx;
         const p = 'M'+n.x+','+n.y+' C'+c1x+','+n.y+' '+c2x+','+cy+' '+cx+','+cy;
-        // Static base line
         s += '<path d="'+p+'" fill="none" stroke="var(--graph-line)" stroke-opacity="0.58" stroke-width="1.5" pathLength="100"/>';
-        // Animated beam using SMIL
         const fromOff = n.side==='l' ? '0' : '-100';
         const toOff = n.side==='l' ? '-100' : '0';
         const delay = (idx * 0.4);
@@ -2090,8 +2152,6 @@ window.addEventListener('resize', () => {
     if (dashboardMode === 'home' && currentView === 'server') renderServerGraph();
 });
 
-/* ── Settings ────────────────────────────────────────────── */
-/* Toast notifications */
 const toastIcons = {
     success: '<svg class="toast-icon toast-icon--success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>',
     error: '<svg class="toast-icon toast-icon--error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
@@ -2153,7 +2213,7 @@ async function loadSemanticSettings() {
         settingsProvider = d.provider || 'openai';
         $('settingsOpenaiUrl').value = d.openaiBaseUrl || '';
         $('settingsOpenaiModel').value = d.openaiModel || '';
-        $('settingsOpenaiKey').value = d.openaiApiKeySet ? '••••••••' : '';
+        $('settingsOpenaiKey').value = d.openaiApiKeySet ? 'â¢â¢â¢â¢â¢â¢â¢â¢' : '';
         $('settingsOllamaUrl').value = d.ollamaBaseUrl || '';
         $('settingsOllamaModel').value = d.ollamaModel || '';
         $('settingsSaveEmbeddings').checked = d.saveEmbeddingsToDisk === true;
@@ -2206,7 +2266,6 @@ async function refreshDecompilerHealth() {
             }
         });
     } catch(e) {
-        // Keep the settings page quiet during transient server reconnects.
     } finally {
         decompilerHealthRefreshInFlight = false;
     }
@@ -2500,8 +2559,8 @@ function decompilerHealthHtml(id) {
     if (health.lastError) titleBits.push(health.lastError);
     return `
         <div class="decompiler-provider-health">
-            <span class="decompiler-health-pill ${decompilerHealthClass(status)}" title="${escapeHtml(titleBits.join(' · '))}">${escapeHtml(decompilerHealthLabel(status))}</span>
-            ${detail.length ? `<span class="decompiler-health-detail">${escapeHtml(detail.join(' · '))}</span>` : ''}
+            <span class="decompiler-health-pill ${decompilerHealthClass(status)}" title="${escapeHtml(titleBits.join(' Â· '))}">${escapeHtml(decompilerHealthLabel(status))}</span>
+            ${detail.length ? `<span class="decompiler-health-detail">${escapeHtml(detail.join(' Â· '))}</span>` : ''}
         </div>
     `;
 }
@@ -2517,7 +2576,7 @@ function decompilerRowHtml(id, index) {
     const settingsSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06A2 2 0 1 1 7.1 4.3l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06A2 2 0 1 1 19.7 7.1l-.06.06A1.65 1.65 0 0 0 19.4 9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
     const meta = id === 'builtin'
         ? ui.description
-        : `${decompilerProviderByline(id, provider)}${provider.endpoint ? ' · ' + provider.endpoint : ''}`;
+        : `${decompilerProviderByline(id, provider)}${provider.endpoint ? ' Â· ' + provider.endpoint : ''}`;
 
     return `
         <div class="decompiler-provider-row ${locked ? 'decompiler-provider-row--pinned' : ''}" data-provider-id="${escapeHtml(id)}" draggable="false">
@@ -2573,7 +2632,7 @@ function collectDecompilerSettings() {
             options: current.options && typeof current.options === 'object' && !Array.isArray(current.options) ? current.options : {}
         };
         if (current.apiKeyDirty === true) provider.apiKey = current.apiKey || '';
-        else if (current.apiKey && !String(current.apiKey).startsWith('••')) provider.apiKey = current.apiKey;
+        else if (current.apiKey && !String(current.apiKey).startsWith('â¢â¢')) provider.apiKey = current.apiKey;
         providers[id] = provider;
     }
 
@@ -2998,7 +3057,7 @@ function openDecompilerProviderModal(id, options = {}) {
 }
 
 function oracleProviderModalHtml(provider) {
-    const maskedKey = provider.apiKey || (provider.apiKeySet ? '••••••••' : '');
+    const maskedKey = provider.apiKey || (provider.apiKeySet ? 'â¢â¢â¢â¢â¢â¢â¢â¢' : '');
     const version = provider.version == null ? '' : String(provider.version);
     const options = formatSettingsJson(provider.options);
     const purchaseUrl = providerUi('oracle').purchaseUrl || '#';
@@ -3304,7 +3363,7 @@ async function saveDecompilerProviderModal(options = {}) {
 
     if (id === 'oracle') {
         const key = ($('decompilerModalOracleKey')?.value || '').trim();
-        if (!key.startsWith('••')) {
+        if (!key.startsWith('â¢â¢')) {
             provider.apiKey = key;
             provider.apiKeySet = Boolean(key);
             provider.apiKeyDirty = true;
@@ -3334,7 +3393,7 @@ async function saveDecompilerProviderModal(options = {}) {
         }
         if (!custom) return false;
         const endpoint = endpointToMcpHostValue(custom.endpoint);
-        if (!custom.apiKey.startsWith('••')) {
+        if (!custom.apiKey.startsWith('â¢â¢')) {
             provider.apiKey = custom.apiKey;
             provider.apiKeySet = Boolean(custom.apiKey);
             provider.apiKeyDirty = true;
@@ -3377,7 +3436,7 @@ function openaiSettingsPayload() {
         openaiBaseUrl: $('settingsOpenaiUrl').value,
         openaiModel: $('settingsOpenaiModel').value
     };
-    if (!key.startsWith('••')) body.openaiApiKey = key;
+    if (!key.startsWith('â¢â¢')) body.openaiApiKey = key;
     return body;
 }
 
@@ -3535,7 +3594,7 @@ $('settingsSaveEmbeddings').addEventListener('change', () => {
 });
 $('deleteEmbeddingCacheBtn').addEventListener('click', () => deleteEmbeddingCache());
 $('settingsTestBtn').addEventListener('click', async () => {
-    const r = $('settingsTestResult'); r.innerHTML = 'Testing…'; r.className = '';
+    const r = $('settingsTestResult'); r.innerHTML = 'Testingâ¦'; r.className = '';
     try {
         const body = {
             enabled: semanticSearchEnabled,
@@ -3546,16 +3605,15 @@ $('settingsTestBtn').addEventListener('click', async () => {
             ollamaModel: $('settingsOllamaModel').value
         };
         const key = $('settingsOpenaiKey').value;
-        if (!key.startsWith('••')) body.openaiApiKey = key;
+        if (!key.startsWith('â¢â¢')) body.openaiApiKey = key;
         const res = await dashboardApiFetch('/api/semantic-settings/test', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         const d = await res.json();
-        r.textContent = d.ok ? `✓ Success (${d.dimensions||'?'}d, ${d.latencyMs||'?'}ms)` : '✗ ' + (d.error||'Failed');
+        r.textContent = d.ok ? `â Success (${d.dimensions||'?'}d, ${d.latencyMs||'?'}ms)` : 'â ' + (d.error||'Failed');
         r.className = 'settings-test-result ' + (d.ok ? 'settings-test-result--ok' : 'settings-test-result--err');
         showToast(d.ok ? 'Connection test passed' : 'Connection test failed', d.ok ? 'success' : 'error');
-    } catch(e) { r.textContent = '✗ Network error'; r.className = 'settings-test-result settings-test-result--err'; showToast('Network error testing connection', 'error'); }
+    } catch(e) { r.textContent = 'â Network error'; r.className = 'settings-test-result settings-test-result--err'; showToast('Network error testing connection', 'error'); }
 });
 
-/* ── Polling ─────────────────────────────────────────────── */
 async function updateStatus() {
     try {
         const res = await dashboardApiFetch('/api/status');
@@ -3565,7 +3623,6 @@ async function updateStatus() {
         currentConnected = !!data.connected;
         if (data.startedAt) startTime = data.startedAt;
 
-        // Overview tiles
         const cb = $('connBadge'); if(cb) { cb.textContent = data.connected?'Active':'Inactive'; cb.className='status-tile-badge '+(data.connected?'status-tile-badge--green':''); }
 
         if (selectedClientId && !clients.find(c => c.clientId === selectedClientId)) {

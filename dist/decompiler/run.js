@@ -1,6 +1,7 @@
 import { DEFAULT_DECOMPILER_RUNTIME_SETTINGS, DEFAULT_PROVIDER_TIMEOUTS_MS, isCustomDecompilerProviderId, isDecompilerProviderId, } from "./settings.js";
 import { getDecompilerProviderStatus, recordDecompilerProviderFailure, recordDecompilerProviderSuccess, shouldSkipDecompilerProvider, } from "./health.js";
 import { compileCustomDecompilerWorkflow } from "./custom-workflow.js";
+import { runVoidhubPipeline } from "./voidhub/pipeline.js";
 const ENDPOINT_BRIDGE_HOST_TOKEN = "{{BridgeHost}}";
 const MAX_ERROR_BODY_CHARS = 600;
 const LUA_EXPERT_MIN_INTERVAL_MS = 120;
@@ -19,6 +20,12 @@ function providerDisplayName(id, provider) {
         return "Konstant";
     if (id === "fission")
         return "Fission";
+    if (id === "voidhub-structured")
+        return "VoidHub structured";
+    if (id === "voidhub-balanced")
+        return "VoidHub balanced";
+    if (id === "voidhub-disasm")
+        return "VoidHub disasm";
     if (isCustomDecompilerProviderId(id)) {
         const name = provider.options.name;
         return typeof name === "string" && name.trim()
@@ -26,6 +33,116 @@ function providerDisplayName(id, provider) {
             : "custom provider";
     }
     return "built-in";
+}
+function isVoidhubProfile(id) {
+    return id === "voidhub-structured" || id === "voidhub-balanced" || id === "voidhub-disasm";
+}
+function voidhubProfileFor(id) {
+    if (id === "voidhub-structured")
+        return "structured";
+    if (id === "voidhub-balanced")
+        return "balanced";
+    return "disasm";
+}
+/** In-process VoidHub decompiler — no network involved. */
+function runVoidhub(provider, bytecode, id, timeoutMs) {
+    const startedAt = Date.now();
+    const configured = provider.options.profile;
+    const profile = typeof configured === "string" && (configured === "structured" || configured === "balanced" || configured === "disasm")
+        ? configured
+        : voidhubProfileFor(id);
+    return new Promise((resolve) => {
+        let settled = false;
+        let timer;
+        const finish = (result) => {
+            if (settled)
+                return;
+            settled = true;
+            if (timer !== undefined)
+                clearTimeout(timer);
+            resolve(result);
+        };
+        // Fallback for environments where worker threads cannot spawn (e.g.
+        // bundled single-file deployments): run the pure-CPU pipeline on the
+        // main thread so behavior stays correct, just without preemption.
+        const runInline = () => {
+            try {
+                const result = runVoidhubPipeline(bytecode, profile);
+                finish({
+                    ok: result.ok,
+                    result: result.source,
+                    error: result.error,
+                    latencyMs: Date.now() - startedAt,
+                });
+            }
+            catch (error) {
+                finish({
+                    ok: false,
+                    error: error instanceof Error ? error.message : String(error),
+                    latencyMs: Date.now() - startedAt,
+                });
+            }
+        };
+        // The pipeline is synchronous CPU work; run it in a worker thread so
+        // a very large chunk cannot stall the server, with the provider
+        // timeout enforced by terminating the worker.
+        const runInWorker = async () => {
+            let workerModule;
+            try {
+                workerModule = await import("node:worker_threads");
+            }
+            catch {
+                runInline();
+                return;
+            }
+            // Copy the bytecode so transferring it does not detach the
+            // caller's buffer (other providers still need it).
+            const bytes = new Uint8Array(bytecode.byteLength);
+            bytes.set(bytecode);
+            let worker;
+            try {
+                worker = new workerModule.Worker(new URL("./voidhub/pipeline-worker.js", import.meta.url), {
+                    workerData: { bytecode: bytes, profile },
+                    transferList: [bytes.buffer],
+                });
+            }
+            catch {
+                runInline();
+                return;
+            }
+            // The worker must never keep the process alive on its own.
+            worker.unref();
+            let delivered = false;
+            timer = setTimeout(() => {
+                finish({
+                    ok: false,
+                    error: `VoidHub ${profile} profile timed out after ${Math.round(timeoutMs / 100) / 10}s.`,
+                    timedOut: true,
+                    latencyMs: Date.now() - startedAt,
+                });
+                void worker.terminate().catch(() => undefined);
+            }, timeoutMs);
+            worker.on("message", (result) => {
+                delivered = true;
+                finish({
+                    ok: result.ok,
+                    result: result.source,
+                    error: result.error,
+                    latencyMs: Date.now() - startedAt,
+                });
+            });
+            worker.on("error", () => {
+                // Worker could not run — fall back to the main thread.
+                if (!settled && !delivered)
+                    runInline();
+            });
+            worker.on("exit", () => {
+                if (!settled && !delivered)
+                    runInline();
+            });
+        };
+        void runInWorker().catch(() => runInline());
+    });
 }
 function providerLoad(id) {
     let load = providerLoadById.get(id);
@@ -445,6 +562,9 @@ async function runProvider(options) {
     if (isCustomDecompilerProviderId(options.id)) {
         return runCustom(options.provider, options.bytecode, options.bytecodeBase64, options.timeoutMs);
     }
+    if (isVoidhubProfile(options.id)) {
+        return runVoidhub(options.provider, options.bytecode, options.id, options.timeoutMs);
+    }
     return {
         ok: false,
         error: `Unsupported decompiler provider: ${options.id}`,
@@ -467,10 +587,6 @@ export function resolveDecompilerProviders(settings, options = {}) {
         if (!provider?.enabled || disabledProviders.has(id))
             continue;
         const skip = shouldSkipDecompilerProvider(id, runtime, options.clientId);
-        // A failed-script resync explicitly requests the provider that handled its
-        // first attempt. Give that provider one real retry even while adaptive
-        // health policy has it in cooldown; subsequent providers still follow the
-        // normal filtered fallback plan.
         if (skip.skip && id !== requestedProvider) {
             skippedAttempts.push(`[${id}] skipped: ${skip.reason ?? "provider is temporarily unavailable"}`);
             continue;

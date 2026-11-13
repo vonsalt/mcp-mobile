@@ -65,8 +65,6 @@ function WorkerPool:DrainQueue(expectedGeneration)
                 end
             end
 
-            -- Reset invalidates queued work but active callbacks retain their
-            -- capacity slot until they actually finish.
             self.ActiveWorkers = math.max(0, self.ActiveWorkers - 1)
             self:DrainQueue()
         end)

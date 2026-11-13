@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_BRIDGE_URL, SERVER_PORT, buildLoaderSnippet, normalizeBridgeUrl, } from "../../../shared/connector-snippet.mjs";
+import { PUBLIC_BASE_URL } from "../../../config.js";
 import { getAutoexecStatus, writeLoaderToAutoexec, } from "../../../shared/autoexec.mjs";
 import { readJsonBody } from "../../body.js";
 const COMMAND_TIMEOUT_MS = 30000;
@@ -87,7 +88,6 @@ function runCommand(file, args, timeoutMs = COMMAND_TIMEOUT_MS, cwd, killProcess
                     child.kill(signal);
             }
             catch {
-                // The process already exited between the timeout and signal.
             }
             return Promise.resolve();
         };
@@ -190,7 +190,6 @@ function parseHarnessResults(output, targets) {
             }
         }
         catch {
-            // Ignore malformed progress lines; the caller supplies a failure fallback.
         }
     }
     return [...results.values()];
@@ -398,6 +397,7 @@ async function setupPayload(req) {
     return {
         serverPort: SERVER_PORT,
         isLocalRequest: isLocalRequest(req),
+        publicUrl: PUBLIC_BASE_URL || null,
         lanIp,
         connectors: {
             currentMachine: connector(DEFAULT_BRIDGE_URL),
@@ -472,10 +472,11 @@ export async function GET(req, res) {
     json(res, 200, await setupPayload(req));
 }
 export async function POST(req, res) {
-    if (!isLocalRequest(req)) {
-        json(res, 403, { error: "Tailscale setup actions are only available from the local dashboard." });
-        return;
-    }
+    // Authorization is enforced at the router level (requiresLocalAdmin →
+    // isAuthorizedLocalAdminRequest): POST /api/client-setup requires the
+    // in-process local-admin token. The old socket-address check is gone
+    // because behind a reverse proxy the socket address is the proxy's,
+    // which can itself be loopback.
     let body;
     try {
         body = await readJsonBody(req);

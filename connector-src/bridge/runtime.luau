@@ -8,14 +8,18 @@ local ResetScriptMappingState = context.ResetScriptMappingState
 local StartScriptMapping = context.StartScriptMapping
 local StartFailedScriptResync = context.StartFailedScriptResync
 local ResumeDeferredScriptMappings = context.ResumeDeferredScriptMappings
---// Main Loop \\--
+local reconnectDelay = 1
+local maxReconnectDelay = 30
 while true do
     local success, Bridge = pcall(CreateBridge)
     
     if not success then
-        task.wait(3)
+        task.wait(reconnectDelay)
+        reconnectDelay = math.min(reconnectDelay * 1.5, maxReconnectDelay)
         continue
     end
+
+    reconnectDelay = 1
 
     local clientId = WaitForBridgeClientId(Bridge)
     if clientId then
@@ -44,18 +48,23 @@ while true do
         require("./handlers/scripts"),
         require("./handlers/instances"),
         require("./handlers/remote-spy/logs"),
-        require("./handlers/remote-spy/control"),
         require("./handlers/input"),
+        require("./handlers/screenshot"),
+        require("./handlers/game-state"),
+        require("./handlers/anticheat"),
     }
     for _, registerHandlers in registrars do
         registerHandlers(context, Bridge)
     end
 
+    getgenv().MCP_ActiveBridge = Bridge
     Bridge:WaitForDisconnect()
+    getgenv().MCP_ActiveBridge = nil
 
     if ScriptMappingPipeline.bridge == Bridge then
         ScriptMappingPipeline.bridge = nil
     end
-    task.wait(1)
+    task.wait(reconnectDelay)
+    reconnectDelay = math.min(reconnectDelay * 1.5, maxReconnectDelay)
 end
 end

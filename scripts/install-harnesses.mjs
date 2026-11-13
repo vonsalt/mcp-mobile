@@ -456,7 +456,7 @@ async function selectAutoexecTargetsOpenTui(targets) {
       const windowed = items.slice(start, start + maxVisibleRows);
       const hiddenBelow = Math.max(0, items.length - (start + windowed.length));
       const scrollHint = start || hiddenBelow
-        ? `${start ? `${start} above` : ""}${start && hiddenBelow ? " · " : ""}${hiddenBelow ? `${hiddenBelow} below` : ""}`
+        ? `${start ? `${start} above` : ""}${start && hiddenBelow ? " Â· " : ""}${hiddenBelow ? `${hiddenBelow} below` : ""}`
         : "ready";
       const searchText = state.mode === "search"
         ? `/ ${state.search}`
@@ -602,7 +602,7 @@ async function selectAutoexecTargetsOpenTui(targets) {
             ...autoexecTargetInfoNodes(Box, Text, activeItem, ui),
             Box({ flexGrow: 1 }),
             Text({ content: `Roblox Executor MCP v${PACKAGE_VERSION}`, fg: ui.text, attributes: 1, height: 1, truncate: true }),
-            Text({ content: `${scrollHint} · autoexec loader`, fg: ui.dim, height: 1, truncate: true })
+            Text({ content: `${scrollHint} Â· autoexec loader`, fg: ui.dim, height: 1, truncate: true })
           )
         )
       );
@@ -684,7 +684,7 @@ function autoexecTargetListNodes(Box, Text, items, activeItem, selected, palette
       }),
       Box({ flexGrow: 1, height: 1, backgroundColor: rowBg }),
       Text({
-        content: checked ? "✓ " : "  ",
+        content: checked ? "â " : "  ",
         fg: active ? "#0F5132" : palette.green,
         bg: rowBg,
         height: 1,
@@ -1948,7 +1948,7 @@ async function selectHarnessesOpenTui(initial) {
       const hiddenBelow = Math.max(0, items.length - (start + windowed.length));
       const modeLabel = state.showAll ? "all supported" : `${baseItems.length} detected`;
       const scrollHint = start || hiddenBelow
-        ? `${start ? `${start} above` : ""}${start && hiddenBelow ? " · " : ""}${hiddenBelow ? `${hiddenBelow} below` : ""}`
+        ? `${start ? `${start} above` : ""}${start && hiddenBelow ? " Â· " : ""}${hiddenBelow ? `${hiddenBelow} below` : ""}`
         : "ready";
       const searchText = state.mode === "search"
         ? `/ ${state.search}`
@@ -2099,7 +2099,7 @@ async function selectHarnessesOpenTui(initial) {
               ...harnessInfoNodes(Box, Text, activeItem, activeAvailability, noDetectedHarnesses, ui),
               Box({ flexGrow: 1 }),
               Text({ content: `Roblox Executor MCP v${PACKAGE_VERSION}`, fg: ui.text, attributes: 1, height: 1, truncate: true }),
-              Text({ content: `${scrollHint} · ${modeLabel}`, fg: ui.dim, height: 1, truncate: true })
+              Text({ content: `${scrollHint} Â· ${modeLabel}`, fg: ui.dim, height: 1, truncate: true })
             )
         )
       );
@@ -2257,7 +2257,7 @@ function harnessListNodes(Box, Text, items, activeItem, selected, options = {}) 
       }),
       Box({ flexGrow: 1, height: 1, backgroundColor: rowBg }),
       Text({
-        content: checked ? "✓ Enabled " : "          ",
+        content: checked ? "â Enabled " : "          ",
         fg: active ? "#0F5132" : palette.green,
         bg: rowBg,
         height: 1,
@@ -2324,7 +2324,7 @@ function infoDotRow(Box, Text, palette, dotColor, content, contentColor) {
       flexDirection: "row",
       backgroundColor: palette.right,
     },
-    Text({ content: "● ", fg: dotColor, height: 1 }),
+    Text({ content: "â ", fg: dotColor, height: 1 }),
     Text({ content, fg: contentColor, height: 1, truncate: true })
   );
 }
@@ -2592,7 +2592,6 @@ function findEditorExtension(fragment) {
       const match = fsSync.readdirSync(root).find((entry) => entry.toLowerCase().includes(q));
       if (match) return match;
     } catch {
-      // Ignore unreadable editor extension folders.
     }
   }
   return "";
@@ -3322,9 +3321,9 @@ function printBanner() {
     console.log(colors.cyan + "|" + colors.reset + padAnsi(` ${colors.bold}${title}${colors.reset}  ${colors.gray}${subtitle}${colors.reset}`, width) + colors.cyan + "|" + colors.reset);
     console.log(colors.cyan + `+${"-".repeat(width)}+` + colors.reset);
   } else {
-    console.log(colors.cyan + `╭${"─".repeat(width)}╮` + colors.reset);
-    console.log(colors.cyan + "│" + colors.reset + padAnsi(` ${colors.bold}${title}${colors.reset}  ${colors.gray}${subtitle}${colors.reset}`, width) + colors.cyan + "│" + colors.reset);
-    console.log(colors.cyan + `╰${"─".repeat(width)}╯` + colors.reset);
+    console.log(colors.cyan + `â­${"â".repeat(width)}â®` + colors.reset);
+    console.log(colors.cyan + "â" + colors.reset + padAnsi(` ${colors.bold}${title}${colors.reset}  ${colors.gray}${subtitle}${colors.reset}`, width) + colors.cyan + "â" + colors.reset);
+    console.log(colors.cyan + `â°${"â".repeat(width)}â¯` + colors.reset);
   }
   console.log(` ${colors.gray}${hint}${colors.reset}\n`);
 }
@@ -3363,18 +3362,18 @@ function log(status, message) {
       dry: "[dry]",
     }[status] || "[-]"
     : {
-      ok: `${colors.green}◆${colors.reset}`,
-      warn: `${colors.yellow}◆${colors.reset}`,
-      info: `${colors.cyan}◇${colors.reset}`,
-      run: `${colors.purple}●${colors.reset}`,
-      skip: `${colors.gray}◇${colors.reset}`,
-      dry: `${colors.yellow}◇${colors.reset}`,
-    }[status] || `${colors.gray}◇${colors.reset}`;
+      ok: `${colors.green}â${colors.reset}`,
+      warn: `${colors.yellow}â${colors.reset}`,
+      info: `${colors.cyan}â${colors.reset}`,
+      run: `${colors.purple}â${colors.reset}`,
+      skip: `${colors.gray}â${colors.reset}`,
+      dry: `${colors.yellow}â${colors.reset}`,
+    }[status] || `${colors.gray}â${colors.reset}`;
   console.log(`${icon} ${message}`);
 }
 
 function startSpinner(label) {
-  const frames = ASCII_MODE ? ["|", "/", "-", "\\"] : ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  const frames = ASCII_MODE ? ["|", "/", "-", "\\"] : ["â ", "â ", "â ¹", "â ¸", "â ¼", "â ´", "â ¦", "â §", "â ", "â "];
   let index = 0;
   let active = process.stdout.isTTY && !PLAIN_MODE;
   if (!active) {
@@ -3392,7 +3391,7 @@ function startSpinner(label) {
       if (!active) return;
       active = false;
       clearInterval(timer);
-      const icon = ok ? `${colors.green}${ASCII_MODE ? "[OK]" : "◆"}${colors.reset}` : `${colors.red}${ASCII_MODE ? "[!]" : "◆"}${colors.reset}`;
+      const icon = ok ? `${colors.green}${ASCII_MODE ? "[OK]" : "â"}${colors.reset}` : `${colors.red}${ASCII_MODE ? "[!]" : "â"}${colors.reset}`;
       process.stdout.write(`\r\x1b[2K${icon} ${label}\n`);
     },
   };

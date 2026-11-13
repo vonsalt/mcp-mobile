@@ -2,30 +2,25 @@ import { execSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-
 export interface RobloxWindowInfo {
-  pid: number;
-  hwnd: string;
-  title: string;
+    pid: number;
+    hwnd: string;
+    title: string;
 }
-
 export interface ScreenshotResult {
-  error?: string;
-  needsDisambiguation?: boolean;
-  windows?: RobloxWindowInfo[];
-  imageBase64?: string;
-  mimeType?: string;
+    error?: string;
+    needsDisambiguation?: boolean;
+    windows?: RobloxWindowInfo[];
+    imageBase64?: string;
+    mimeType?: string;
 }
-
 export const DEFAULT_SCREENSHOT_MAX_WIDTH = 1280;
 export const DEFAULT_SCREENSHOT_JPEG_QUALITY = 70;
-
 export function isSupported(): boolean {
-  return process.platform === "win32";
+    return process.platform === "win32";
 }
-
 export function enumRobloxWindows(): RobloxWindowInfo[] {
-  const ps = `
+    const ps = `
 Add-Type @"
 using System;
 using System.Collections.Generic;
@@ -73,34 +68,31 @@ if ($found.Count -eq 0) {
     $found | ConvertTo-Json -Compress
 }
 `;
-
-  const tmpFile = path.join(os.tmpdir(), `roblox_enum_${Date.now()}.ps1`);
-  try {
-    fs.writeFileSync(tmpFile, ps, "utf-8");
-    const raw = execSync(
-      `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmpFile}"`,
-      { encoding: "utf-8", timeout: 15000, windowsHide: true }
-    ).trim();
-    if (!raw || raw === "" || raw === "null") return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [parsed];
-  } catch (err) {
-    console.error("[Screenshot] enumRobloxWindows failed:", (err as Error).message);
-    return [];
-  } finally {
-    try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
-  }
+    const tmpFile = path.join(os.tmpdir(), `roblox_enum_${Date.now()}.ps1`);
+    try {
+        fs.writeFileSync(tmpFile, ps, "utf-8");
+        const raw = execSync(`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmpFile}"`, { encoding: "utf-8", timeout: 15000, windowsHide: true }).trim();
+        if (!raw || raw === "" || raw === "null")
+            return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [parsed];
+    }
+    catch (err) {
+        console.error("[Screenshot] enumRobloxWindows failed:", (err as Error).message);
+        return [];
+    }
+    finally {
+        try {
+            fs.unlinkSync(tmpFile);
+        }
+        catch { }
+    }
 }
-
-function captureWindowPNG(
-  hwnd: string,
-  maxWidth: number = DEFAULT_SCREENSHOT_MAX_WIDTH,
-  jpegQuality: number = DEFAULT_SCREENSHOT_JPEG_QUALITY
-): string {
-  const outFile = path.join(os.tmpdir(), `roblox_screenshot_${Date.now()}.b64`);
-  const safeMaxWidth = Math.max(320, Math.min(Math.floor(maxWidth) || DEFAULT_SCREENSHOT_MAX_WIDTH, 3840));
-  const safeQuality = Math.max(30, Math.min(Math.floor(jpegQuality) || DEFAULT_SCREENSHOT_JPEG_QUALITY, 95));
-  const ps = `
+function captureWindowPNG(hwnd: string, maxWidth: number = DEFAULT_SCREENSHOT_MAX_WIDTH, jpegQuality: number = DEFAULT_SCREENSHOT_JPEG_QUALITY): string {
+    const outFile = path.join(os.tmpdir(), `roblox_screenshot_${Date.now()}.b64`);
+    const safeMaxWidth = Math.max(320, Math.min(Math.floor(maxWidth) || DEFAULT_SCREENSHOT_MAX_WIDTH, 3840));
+    const safeQuality = Math.max(30, Math.min(Math.floor(jpegQuality) || DEFAULT_SCREENSHOT_JPEG_QUALITY, 95));
+    const ps = `
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
 using System;
@@ -170,51 +162,50 @@ $b64 = [Convert]::ToBase64String($bytes)
 [System.IO.File]::WriteAllText('${outFile.replace(/\\/g, "\\\\")}', $b64)
 Write-Output 'OK'
 `;
-
-  const tmpFile = path.join(os.tmpdir(), `roblox_capture_${Date.now()}.ps1`);
-  try {
-    fs.writeFileSync(tmpFile, ps, "utf-8");
-    execSync(
-      `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmpFile}"`,
-      { encoding: "utf-8", timeout: 15000, windowsHide: true }
-    );
-
-    if (!fs.existsSync(outFile)) throw new Error("PrintWindow did not produce output file");
-    const result = fs.readFileSync(outFile, "utf-8").trim();
-    if (!result) throw new Error("PrintWindow returned empty output");
-    return result;
-  } finally {
-    try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
-    try { fs.unlinkSync(outFile); } catch { /* ignore */ }
-  }
-}
-
-export function performScreenshot(pid?: number, maxWidth?: number): ScreenshotResult {
-  const windows = enumRobloxWindows();
-
-  if (windows.length === 0) {
-    return { error: "No visible Roblox windows found. Make sure Roblox is running and not minimized." };
-  }
-
-  let targets = windows;
-  if (pid !== undefined) {
-    targets = windows.filter((w) => w.pid === pid);
-    if (targets.length === 0) {
-      return {
-        error: `No Roblox window found for PID ${pid}. Available windows:\n` +
-          windows.map((w) => `  PID ${w.pid} — "${w.title}"`).join("\n"),
-      };
+    const tmpFile = path.join(os.tmpdir(), `roblox_capture_${Date.now()}.ps1`);
+    try {
+        fs.writeFileSync(tmpFile, ps, "utf-8");
+        execSync(`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmpFile}"`, { encoding: "utf-8", timeout: 15000, windowsHide: true });
+        if (!fs.existsSync(outFile))
+            throw new Error("PrintWindow did not produce output file");
+        const result = fs.readFileSync(outFile, "utf-8").trim();
+        if (!result)
+            throw new Error("PrintWindow returned empty output");
+        return result;
     }
-  }
-
-  if (targets.length > 1 && pid === undefined) {
-    return {
-      needsDisambiguation: true,
-      windows: targets,
-    };
-  }
-
-  const target = targets[0]!;
-  const imageBase64 = captureWindowPNG(target.hwnd, maxWidth);
-  return { imageBase64, mimeType: "image/jpeg" };
+    finally {
+        try {
+            fs.unlinkSync(tmpFile);
+        }
+        catch { }
+        try {
+            fs.unlinkSync(outFile);
+        }
+        catch { }
+    }
+}
+export function performScreenshot(pid?: number, maxWidth?: number): ScreenshotResult {
+    const windows = enumRobloxWindows();
+    if (windows.length === 0) {
+        return { error: "No visible Roblox windows found. Make sure Roblox is running and not minimized." };
+    }
+    let targets = windows;
+    if (pid !== undefined) {
+        targets = windows.filter((w) => w.pid === pid);
+        if (targets.length === 0) {
+            return {
+                error: `No Roblox window found for PID ${pid}. Available windows:\n` +
+                    windows.map((w) => `  PID ${w.pid} — "${w.title}"`).join("\n"),
+            };
+        }
+    }
+    if (targets.length > 1 && pid === undefined) {
+        return {
+            needsDisambiguation: true,
+            windows: targets,
+        };
+    }
+    const target = targets[0]!;
+    const imageBase64 = captureWindowPNG(target.hwnd, maxWidth);
+    return { imageBase64, mimeType: "image/jpeg" };
 }

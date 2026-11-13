@@ -7,357 +7,364 @@ local g=b.SanitizeForOutput
 local h=b.LuaEncode
 
 
-local i={};do
-i.__index=i
-
-function i.BindToType(j,k,l)
-j.Callbacks[k]=l
-end
-
-function i.BindToTypeRaw(j,k,l)
-j.Callbacks[k]=l
-j.RawCallbacks=j.RawCallbacks or{}
-j.RawCallbacks[k]=true
-end
-
-function i.CreateAlias(j,k,l)
-for m,n in l do
-j.Callbacks[n]=j.Callbacks[k]
-if j.RawCallbacks and j.RawCallbacks[k]then
-j.RawCallbacks[n]=true
-end
+local i,j do
+local k=d:match"^([^:/]+)"or d
+local l=k=="localhost"or k=="127.0.0.1"or k=="::1"
+or k:match"^192%.168%."or k:match"^10%."or k:match"^172%."
+or k:match"^%d+%.%d+%.%d+%.%d+$"
+if l then
+i,j="ws://","http://"
+else
+i,j="wss://","https://"
 end
 end
 
-function i.HandleMessage(j,k)
-if j.Callbacks[k.type]then
-local l,m=pcall(function()
-return j.Callbacks[k.type](k)
+local k={};do
+k.__index=k
+
+function k.BindToType(l,m,n)
+l.Callbacks[m]=n
+end
+
+function k.BindToTypeRaw(l,m,n)
+l.Callbacks[m]=n
+l.RawCallbacks=l.RawCallbacks or{}
+l.RawCallbacks[m]=true
+end
+
+function k.CreateAlias(l,m,n)
+for o,p in n do
+l.Callbacks[p]=l.Callbacks[m]
+if l.RawCallbacks and l.RawCallbacks[m]then
+l.RawCallbacks[p]=true
+end
+end
+end
+
+function k.HandleMessage(l,m)
+if l.Callbacks[m.type]then
+local n,o=pcall(function()
+return l.Callbacks[m.type](m)
 end)
 
-if l and m==nil then
+if n and o==nil then
 return nil
 end
 
-if not l then
-return j:FormatResponse(m,k.id,true)
+if not n then
+return l:FormatResponse(o,m.id,true)
 end
 
-if j.RawCallbacks and j.RawCallbacks[k.type]then
+if l.RawCallbacks and l.RawCallbacks[m.type]then
 return{
-output=tostring(m),
+output=tostring(o),
 success=true,
-id=k.id
+id=m.id
 }
 end
 
-return j:FormatResponse(m,k.id,false)
+return l:FormatResponse(o,m.id,false)
 end
 return nil
 end
 
-function i.FormatResponse(j,k,l,m)
-if m then
+function k.FormatResponse(l,m,n,o)
+if o then
 return{
-error=tostring(k),
+error=tostring(m),
 success=false,
-id=l
+id=n
 }
 end
 
-local n=g(k)
-if typeof(n)~="table"then
-n={n}
+local p=g(m)
+if typeof(p)~="table"then
+p={p}
 end
 
 return{
-output=h(n,{
+output=h(p,{
 Prettify=false
 }),
 success=true,
-id=l
+id=n
 }
 end
 
-function i.IsAlive(j)
-local k,l=pcall(function()
-local k
-local l=task.spawn(function()
-local l,m=pcall(request,{
-Url="http://"..d,
+function k.IsAlive(l)
+local m,n=pcall(function()
+local m
+local n=task.spawn(function()
+local n,o=pcall(request,{
+Url=j..d,
 Method="GET"
 })
 
-if l then
-k=m
+if n then
+m=o
 end
 end)
 
-local m=os.clock()
-repeat task.wait(0.05)until k~=nil or os.clock()-m>5
+local o=os.clock()
+repeat task.wait(0.05)until m~=nil or os.clock()-o>5
 
-if k==nil then
-task.cancel(l)
+if m==nil then
+task.cancel(n)
 return false
 end
 
-
-if k.StatusCode==426 or k.StatusCode==200 then
+if m.StatusCode==426 or m.StatusCode==200 then
 return true
 end
 
 return false
 end)
 
-if not k then
+if not m then
 return false
 end
 
-return l
+return n
 end
 end
 
+local l=setmetatable({},{__index=k});do
+l.__index=l
 
-local j=setmetatable({},{__index=i});do
-j.__index=j
+function l.new()
+local m=setmetatable({},l)
 
-function j.new()
-local k=setmetatable({},j)
+local n=0.5
+local o=5
+local p=10
+local q=0
 
-
-local l=0.5
-local m=5
-local n=10
-local o=0
-
-while not k:IsAlive()do
-o+=1
-if o>=n then
-error("Failed to connect to bridge server after "..n.." attempts")
+while not m:IsAlive()do
+q+=1
+if q>=p then
+error("Failed to connect to bridge server after "..p.." attempts")
 end
-task.wait(l)
-l=math.min(l*1.5,m)
+task.wait(n)
+n=math.min(n*1.5,o)
 end
 
-
-local p
-local q=task.spawn(function()
-local q,r=pcall(function()
-return WebSocket.connect("ws://"..d)
+local r
+local s=task.spawn(function()
+local s,t=pcall(function()
+return WebSocket.connect(i..d)
 end)
-if q then
-p=r
+if s then
+r=t
 end
 end)
 
-local r=os.clock()
-repeat task.wait(0.05)until p~=nil or os.clock()-r>5
+local t=os.clock()
+repeat task.wait(0.05)until r~=nil or os.clock()-t>5
 
-if p==nil then
-task.cancel(q)
+if r==nil then
+task.cancel(s)
 error"WebSocket connection timed out after 5 seconds"
 end
 
-k.WebSocket=p
-k.Connected=true
-k.Callbacks={}
-k.ClientId=nil
+m.WebSocket=r
+m.Connected=true
+m.Callbacks={}
+m.ClientId=nil
 
+m.WebSocket:Send(c:JSONEncode(f()))
 
-k.WebSocket:Send(c:JSONEncode(f()))
-
-k.AliveThread=task.spawn(function()
-local s=0
+m.AliveThread=task.spawn(function()
+local u=0
 while task.wait(1)do
-if not k.Connected then
+if not m.Connected then
 continue
 end
 
-if k:IsAlive()then
-s=0
+if m.WebSocket then
+u=0
 continue
 end
 
-s+=1
-if s<3 then
+if m:IsAlive()then
+u=0
 continue
 end
 
-k.Connected=false
+u+=1
+if u<3 then
+continue
+end
+
+m.Connected=false
 break
 end
 
 pcall(function()
-k.WebSocket:Close()
+m.WebSocket:Close()
 end)
 end)
 
+m.WebSocket.OnMessage:Connect(function(u)
+local v=c:JSONDecode(u)
 
-k.WebSocket.OnMessage:Connect(function(s)
-local t=c:JSONDecode(s)
-
-
-if t.type=="registered"then
-k.ClientId=t.clientId
+if v.type=="registered"then
+m.ClientId=v.clientId
 return
 end
 
-local u=k:HandleMessage(t)
-if u then
-k.WebSocket:Send(c:JSONEncode(u))
+local w=m:HandleMessage(v)
+if w then
+m.WebSocket:Send(c:JSONEncode(w))
 end
 end)
 
-
-k.WebSocket.OnClose:Connect(function()
-k.Connected=false
+m.WebSocket.OnClose:Connect(function()
+m.Connected=false
 end)
 
-return k
+if m.WebSocket.OnError then
+m.WebSocket.OnError:Connect(function()
+m.Connected=false
+end)
 end
 
-function j.WaitForDisconnect(k)
-while k.Connected do
+return m
+end
+
+function l.WaitForDisconnect(m)
+while m.Connected do
 task.wait(0.1)
 end
 end
 end
 
+local m=setmetatable({},{__index=k});do
+m.__index=m
 
-local k=setmetatable({},{__index=i});do
-k.__index=k
+function m.new()
+local n=setmetatable({},m)
 
-function k.new()
-local l=setmetatable({},k)
+local o=0.5
+local p=5
+local q=10
+local r=0
 
-
-local m=0.5
-local n=5
-local o=10
-local p=0
-
-while not l:IsAlive()do
-p+=1
-if p>=o then
-error("Failed to connect to bridge server after "..o.." attempts")
+while not n:IsAlive()do
+r+=1
+if r>=q then
+error("Failed to connect to bridge server after "..q.." attempts")
 end
-task.wait(m)
-m=math.min(m*1.5,n)
+task.wait(o)
+o=math.min(o*1.5,p)
 end
 
-l.Connected=true
-l.Callbacks={}
-l.PollInterval=0.1
-l.ClientId=nil
-
+n.Connected=true
+n.Callbacks={}
+n.PollInterval=0.1
+n.ClientId=nil
 
 pcall(function()
-local q=request{
-Url="http://"..d.."/register",
+local s=request{
+Url=j..d.."/register",
 Method="POST",
 Headers={["Content-Type"]="application/json"},
 Body=c:JSONEncode(f()),
 }
-if q.StatusCode==200 and q.Body then
-local r=c:JSONDecode(q.Body)
-l.ClientId=r.clientId
+if s.StatusCode==200 and s.Body then
+local t=c:JSONDecode(s.Body)
+n.ClientId=t.clientId
 end
 end)
 
+n.PollThread=task.spawn(function()
+local s=0
 
-l.PollThread=task.spawn(function()
-local q=0
-
-while l.Connected do
-local r=false local
-s=pcall(function()
-local s="http://"..d.."/poll"
-if l.ClientId then
-s=s.."?clientId="..l.ClientId
+while n.Connected do
+local t=false local
+u=pcall(function()
+local u=j..d.."/poll"
+if n.ClientId then
+u=u.."?clientId="..n.ClientId
 end
-local t=request{
-Url=s,
+local v=request{
+Url=u,
 Method="GET"
 }
 
-
-if t.StatusCode~=204 and t.StatusCode~=200 then
-q+=1
-if q>=3 then
-l.Connected=false
+if v.StatusCode~=204 and v.StatusCode~=200 then
+s+=1
+if s>=3 then
+n.Connected=false
 end
 
 return
 end
 
-q=0
+s=0
 
-
-if t.Body and t.Body~=""then
-local u=c:JSONDecode(t.Body)
-local v={}
-if typeof(u)=="table"and u.type==nil and#u>0 then
-v=u
-elseif typeof(u)=="table"and u.type~=nil then
-v={u}
+if v.Body and v.Body~=""then
+local w=c:JSONDecode(v.Body)
+local x={}
+if typeof(w)=="table"and w.type==nil and#w>0 then
+x=w
+elseif typeof(w)=="table"and w.type~=nil then
+x={w}
 end
 
-for w,x in ipairs(v)do
-r=true
+for y,z in ipairs(x)do
+t=true
 task.spawn(function()
-local y=l:HandleMessage(x)
-if y==nil then return end
-
+local A=n:HandleMessage(z)
+if A==nil then return end
 
 request{
-Url="http://"..d.."/respond",
+Url=j..d.."/respond",
 Method="POST",
 Headers={
 ["Content-Type"]="application/json"
 },
-Body=c:JSONEncode(y)
+Body=c:JSONEncode(A)
 }
 end)
 end
 end
 end)
 
-if not s then
-q+=1
-if q>=3 then
-l.Connected=false
+if not u then
+s+=1
+if s>=3 then
+n.Connected=false
 end
 end
 
-if not r then
-task.wait(l.PollInterval)
+if not t then
+task.wait(n.PollInterval)
 end
 end
 end)
 
-return l
+return n
 end
 
-function k.WaitForDisconnect(l)
-while l.Connected do
+function m.WaitForDisconnect(n)
+while n.Connected do
 task.wait(0.1)
 end
 end
 end
 
-
 local function CreateBridge()
 if e then
-local l,m=pcall(function()
-return j.new()
+local n,o=pcall(function()
+return l.new()
 end)
 
-if l then
-return m
+if n then
+return o
 end
 end
 
-return k.new()
+return m.new()
 end
 
 return{
@@ -431,8 +438,6 @@ else
 g=nil
 end
 end
-
-
 
 c.ActiveWorkers=math.max(0,c.ActiveWorkers-1)
 c:DrainQueue()
@@ -2020,7 +2025,6 @@ if c.initialScanRunning or c.initialScanFinished then return end
 c.initialScanRunning=true
 local E=c.generation
 
-
 task.spawn(function()
 local F={}
 local G=false local
@@ -2267,7 +2271,6 @@ c:BindToTypeRaw("get-script-content",function(h)
 local i
 local j
 
-
 if h.debugId then
 j=e(h.debugId)
 assert(j,"No live script instance found for ScriptProxy with DebugId: "..tostring(h.debugId))
@@ -2281,58 +2284,75 @@ assert(not(j:IsA"Script"and j.RunContext==Enum.RunContext.Server),"Script instan
 end
 
 local k
-i,_,k=f(
+local l
+i,l,k=f(
 j,
 nil,
 d.generation,
 d.clientId
 )
-assert(i,"Failed to decompile script.")
 
-local l=j:GetDebugId()
-local m=d.jobs[l]
-if d.clientId and(not m or m.state~="mapped")then
+if not i and j then
+local m,n=pcall(function()return j.Source end)
+if m and type(n)=="string"and n~=""then
+i=n
+l=nil
+end
+end
+
+if not i and j and type(getscriptbytecode)=="function"then
+local m,n=pcall(function()return getscriptbytecode(j)end)
+if m and type(n)=="string"and#n>0 then
+i="-- Bytecode (decompile unavailable). Length: "..#n.." bytes\n"..n
+l=nil
+end
+end
+
+assert(i,"Failed to decompile script. "..tostring(l or"No decompile function or script source available on this executor."))
+
+local m=j:GetDebugId()
+local n=d.jobs[m]
+if d.clientId and(not n or n.state~="mapped")then
 g(
 j,
 i,
 k,
 d.generation,
-l
+m
 )
 end
 
-
-local n={}
-local o=1
-local p=#i
-while o<=p do
-local q=i:find("\n",o,true)
-if q then
-table.insert(n,i:sub(o,q-1))
-o=q+1
+local o={}
+local p=1
+local q=#i
+while p<=q do
+local r=i:find("\n",p,true)
+if r then
+table.insert(o,i:sub(p,r-1))
+p=r+1
 else
-table.insert(n,i:sub(o))
+table.insert(o,i:sub(p))
 break
 end
 end
 
-local q=#n
-local r=math.max(1,math.min(tonumber(h.maxLines)or 200,2000))
-local s=h.startLine and math.max(1,math.min(h.startLine,q))or 1
-local t=h.endLine and math.max(s,math.min(h.endLine,q))or q
-local u=math.min(t,s+r-1)
+local r=#o
+local s=math.max(1,math.min(tonumber(h.maxLines)or 200,2000))
+local t=h.startLine and math.max(1,math.min(h.startLine,r))or 1
+local u=h.endLine and math.max(t,math.min(h.endLine,r))or r
+local v=math.min(u,t+s-1)
 
-local v={}
-for w=s,u do
-table.insert(v,n[w])
+local w={}
+for x=t,v do
+table.insert(w,o[x])
 end
 
-local w=""
-if u<t then
-w="\n-- Output truncated to "..r.." lines. Rerun with startLine="..(u+1).." or a tighter range to continue."
+local x=""
+if v<u then
+x="\n-- Output truncated to "..s.." lines. Rerun with startLine="..(v+1).." or a tighter range to continue."
 end
 
-return"-- Lines "..s.."-"..u.." of "..q.."\n"..table.concat(v,"\n")..w
+return"-- Lines "..t.."-"..v.." of "..r.."\n"..table.concat(w,"\n")..x
 end)
 end end function a.n():typeof(__modImpl())local b=a.cache.n if not b then b={c=__modImpl()}a.cache.n=b end return b.c end end do local function __modImpl()
 
@@ -2370,8 +2390,14 @@ end)
 
 c:BindToType("get-game-info",function(f)
 local g=d:GetProductInfo(game.PlaceId)
+local h=game.Players.LocalPlayer
 
-local h={
+local i
+pcall(function()
+i=e.GetServerType:InvokeServer()
+end)
+
+local j={
 PlaceId=game.PlaceId,
 GameId=game.GameId,
 PlaceVersion=game.PlaceVersion,
@@ -2380,16 +2406,28 @@ Creator=g.Creator.Name,
 CreatorType=tostring(g.Creator.CreatorType),
 CreatorId=g.Creator.CreatorTargetId,
 JobId=game.JobId,
-ServerType=e.GetServerType:InvokeServer()
+ServerType=i,
+LocalPlayer=h and{
+Name=h.Name,
+UserId=h.UserId,
+DisplayName=h.DisplayName,
+AccountAge=h.AccountAge,
+Team=h.Team and h.Team.Name or nil,
+}or nil,
+Workspace={
+ChildCount=#game.Workspace:GetChildren(),
+CameraSubject=game.Workspace.CurrentCamera and tostring(game.Workspace.CurrentCamera.CameraSubject)or nil,
+},
+PlayerCount=#game.Players:GetPlayers(),
+MaxPlayers=game.Players.MaxPlayers,
+IsStudio=game:GetService"RunService":IsStudio(),
 }
 
-
-
 if f.includeDescription==true then
-h.PlaceDescription=g.Description
+j.PlaceDescription=g.Description
 end
 
-return h
+return j
 end)
 
 c:BindToType("get-descendants-tree",function(f)
@@ -2461,8 +2499,6 @@ break
 end
 
 if k and not w:IsA(j)then
-
-
 if q<h then
 local x=buildTree(w,q+1)
 if x and x.Children and#x.Children>0 then
@@ -2511,272 +2547,34 @@ end end function a.o():typeof(__modImpl())local b=a.cache.o if not b then b={c=_
 
 return function(b,c)
 c:BindToType("ensure-remote-spy",function(d)
-if getgenv().Cobalt then
+
+if getgenv().CobaltInitialized then
 return{
-status="already_loaded",
-message="Cobalt remote spy is already running."
+status="ready",
+mode="cobalt",
+message="Cobalt remote spy is active.",
 }
 end
 
-
-local e,f=pcall(function()
-loadstring(game:HttpGet"https://github.com/notpoiu/cobalt/releases/latest/download/Cobalt.luau")()
-end)
-
-if not e then
-error("Failed to load Cobalt: "..tostring(f))
-end
-
-
-local g=os.clock()
-while not getgenv().Cobalt and os.clock()-g<10 do
-task.wait(0.1)
-end
-
-assert(getgenv().Cobalt,"Cobalt loaded but failed to initialize within 10 seconds.")
-
+if getgenv().MCP_CustomRemoteSpy then
 return{
-status="loaded",
-message="Cobalt remote spy loaded successfully."
+status="ready",
+mode=getgenv().MCP_CustomRemoteSpy.type or"custom",
+message="Custom remote spy is active.",
 }
-end)
-
-c:BindToType("get-remote-spy-logs",function(d)
-local e=getgenv().Cobalt
-assert(e and e.shared and e.shared.Logs,"Cobalt remote spy is not loaded. Call ensure-remote-spy first.")
-
-local f=d.direction or"Both"
-local g=d.remoteNameFilter or""
-local h=math.max(1,math.min(tonumber(d.limit)or 10,100))
-local i=math.max(0,math.min(tonumber(d.maxCallsPerRemote)or 2,20))
-local j=d.summaryOnly==true
-local k=g~=""
-
-local function ProcessLogs(l,m)
-local n={}
-
-for o,p in l do
-if typeof(o)~="Instance"then continue end
-if#n>=h then break end
-
-local q=""
-local r=""
-pcall(function()
-q=o.Name
-r=o.ClassName
-end)
-
-
-if k and not string.find(string.lower(q),string.lower(g),1,true)then
-continue
 end
-
-
-local s={}
-local t=#p.Calls
-local u=math.max(1,t-i+1)
-
-if not j then
-for v=u,t do
-local w=p.Calls[v]
-if not w then continue end
-
-table.insert(s,{
-Index=v,
-Arguments=w.Arguments,
-Origin=w.Origin,
-IsExecutor=w.IsExecutor or false,
-IsActor=w.IsActor or false,
-Line=w.Line,
-})
+local e=getgenv().MCP_RemoteMonitor
+if e then
+return{status="ready",message="Remote Monitor is ready."}
 end
-end
-
-table.insert(n,{
-RemoteName=q,
-RemoteClass=r,
-Direction=m,
-Method=p.Method,
-TotalCalls=t,
-Ignored=p.Ignored,
-Blocked=p.Blocked,
-RecentCalls=if j then nil else s,
-})
-end
-
-return n
-end
-
-local l={}
-
-if f=="Outgoing"or f=="Both"then
-local m=ProcessLogs(e.shared.Logs.Outgoing,"Outgoing")
-for n,o in m do
-table.insert(l,o)
-end
-end
-
-if f=="Incoming"or f=="Both"then
-local m=ProcessLogs(e.shared.Logs.Incoming,"Incoming")
-for n,o in m do
-table.insert(l,o)
-end
-end
-
-
-table.sort(l,function(m,n)
-return m.TotalCalls>n.TotalCalls
-end)
-
-
-if#l>h then
-local m={}
-for n=1,h do
-m[n]=l[n]
-end
-l=m
-end
-
-return{
-count=#l,
-results=l
+getgenv().MCP_RemoteMonitor={
+startedAt=os.time(),
+scans=0,
+lastScanAt=nil,
 }
+return{status="ready",message="Read-only Remote Monitor is ready."}
 end)
 end end function a.p():typeof(__modImpl())local b=a.cache.p if not b then b={c=__modImpl()}a.cache.p=b end return b.c end end do local function __modImpl()
-
-return function(b,c)
-c:BindToType("clear-remote-spy-logs",function(d)
-local e=getgenv().Cobalt
-assert(e and e.shared and e.shared.ClearLogs,"Cobalt remote spy is not loaded. Call ensure-remote-spy first.")
-
-e.shared.ClearLogs()
-
-return{
-status="cleared",
-message="All remote spy logs have been cleared."
-}
-end)
-
-c:BindToType("block-remote",function(d)
-local e=getgenv().Cobalt
-assert(e and e.shared and e.shared.Logs,"Cobalt remote spy is not loaded. Call ensure-remote-spy first.")
-
-local f=d.remoteName
-local g=d.direction
-local h=d.shouldBlock
-
-local i=e.shared.Logs[g]
-assert(i,"Invalid direction: "..tostring(g))
-
-for j,k in i do
-if typeof(j)~="Instance"then continue end
-
-local l=""
-pcall(function()l=j.Name end)
-
-if l==f then
-if h and not k.Blocked then
-k:Block()
-elseif not h and k.Blocked then
-k:Block()
-end
-
-return{
-status="success",
-message=(h and"Blocked"or"Unblocked").." remote: "..f,
-blocked=k.Blocked
-}
-end
-end
-
-error("Remote not found: "..f.." in "..g.." logs. Make sure the remote has been logged at least once.")
-end)
-
-c:BindToType("ignore-remote",function(d)
-local e=getgenv().Cobalt
-assert(e and e.shared and e.shared.Logs,"Cobalt remote spy is not loaded. Call ensure-remote-spy first.")
-
-local f=d.remoteName
-local g=d.direction
-local h=d.shouldIgnore
-
-local i=e.shared.Logs[g]
-assert(i,"Invalid direction: "..tostring(g))
-
-for j,k in i do
-if typeof(j)~="Instance"then continue end
-
-local l=""
-pcall(function()l=j.Name end)
-
-if l==f then
-if h and not k.Ignored then
-k:Ignore()
-elseif not h and k.Ignored then
-k:Ignore()
-end
-
-return{
-status="success",
-message=(h and"Ignoring"or"Unignored").." remote: "..f,
-ignored=k.Ignored
-}
-end
-end
-
-error("Remote not found: "..f.." in "..g.." logs. Make sure the remote has been logged at least once.")
-end)
-
-
-
-
-c:BindToType("remote-spy",function(d)
-c.Callbacks["ensure-remote-spy"]{}
-
-local e=d.operation
-if e=="status"then
-local f=getgenv().Cobalt
-local function CountLogs(g)
-local h=0
-if typeof(g)~="table"then return h end
-for i in g do
-h+=1
-end
-return h
-end
-
-return{
-status="loaded",
-outgoingRemotes=CountLogs(f.shared and f.shared.Logs and f.shared.Logs.Outgoing),
-incomingRemotes=CountLogs(f.shared and f.shared.Logs and f.shared.Logs.Incoming),
-}
-elseif e=="list"then
-return c.Callbacks["get-remote-spy-logs"]{
-direction=d.direction,
-remoteNameFilter=d.nameFilter,
-limit=d.limit,
-maxCallsPerRemote=d.maxCallsPerRemote,
-summaryOnly=d.summaryOnly,
-}
-elseif e=="clear"then
-return c.Callbacks["clear-remote-spy-logs"]{}
-elseif e=="block"or e=="unblock"then
-return c.Callbacks["block-remote"]{
-remoteName=d.remoteName,
-direction=d.direction,
-shouldBlock=e=="block",
-}
-elseif e=="ignore"or e=="unignore"then
-return c.Callbacks["ignore-remote"]{
-remoteName=d.remoteName,
-direction=d.direction,
-shouldIgnore=e=="ignore",
-}
-end
-
-error("Invalid remote-spy operation: "..tostring(e))
-end)
-end end function a.q():typeof(__modImpl())local b=a.cache.q if not b then b={c=__modImpl()}a.cache.q=b end return b.c end end do local function __modImpl()
 
 return function(b,c)
 local d=b.VirtualInputManager
@@ -2865,25 +2663,1291 @@ end
 
 assert(typeof(h)=="Instance","Path did not resolve to a valid Instance.")
 assert(h:IsA"GuiButton","Resolved Instance is not a GuiButton (e.g., TextButton or ImageButton).")
-assert(typeof(firesignal)=="function","Your executor does not support 'firesignal', which is required for this command.")
 
 local i={"Activated","MouseButton1Down","MouseButton2Down","MouseButton1Click","MouseButton2Click"}
+local j="unknown"
 
 if g then
 assert(table.find(i,g),"Invalid action provided. Valid actions are: "..table.concat(i,", "))
+end
+
+if type(firesignal)=="function"then
+j="firesignal"
+if g then
 firesignal(h[g])
 else
-for j,k in pairs(i)do
-pcall(function()firesignal(h[k])end)
+for k,l in pairs(i)do
+pcall(function()firesignal(h[l])end)
+end
+end
+elseif h.Activate and type(h.Activate)=="function"then
+j="Activate"
+pcall(function()h:Activate()end)
+else
+j="VirtualInputManager"
+local k,l=pcall(function()
+local k=h.AbsolutePosition
+local l=h.AbsoluteSize
+if k and l then
+local m=k.X+l.X/2
+local n=k.Y+l.Y/2
+pcall(function()
+d:SendMouseButton(true,Enum.UserInputType.MouseButton1,Vector2.new(m,n),0,game)
+task.wait(0.05)
+d:SendMouseButton(false,Enum.UserInputType.MouseButton1,Vector2.new(m,n),0,game)
+end)
+pcall(function()
+d:SendTouchEvent(true,Vector2.new(m,n),0,game)
+task.wait(0.05)
+d:SendTouchEvent(false,Vector2.new(m,n),0,game)
+end)
+end
+end)
+if not k then
+error("Failed to click button: "..tostring(l))
 end
 end
 
 return{
 status="success",
-message="Successfully fired click signals on Button."
+message="Successfully clicked Button using method: "..j,
+method=j
+}
+end)
+end end function a.q():typeof(__modImpl())local b=a.cache.q if not b then b={c=__modImpl()}a.cache.q=b end return b.c end end do local function __modImpl()
+
+return function(b,c)
+local d=b.HttpService
+local e=b.base64_encode
+
+c:BindToTypeRaw("client-screenshot",function(f)
+local g=tonumber(f.maxWidth)or 1280
+g=math.max(256,math.min(g,2560))
+
+local h=tonumber(f.quality)or 80
+h=math.max(20,math.min(h,100))
+
+local i
+local j="png"
+
+
+local k=getgenv and getgenv().MCP_ScreenshotFn
+if type(k)=="function"then
+local l,m=pcall(k)
+if l and type(m)=="string"and#m>0 then
+i=m
+end
+end
+
+
+local l={screenshot,takescreenshot}
+for m,n in ipairs(l)do
+if not i and type(n)=="function"then
+local o,p=pcall(n)
+if o and type(p)=="string"and#p>0 then
+i=p
+end
+end
+end
+
+
+if not i and type(syn)=="table"and type(syn.screenshot)=="function"then
+local m,n=pcall(syn.screenshot)
+if m and type(n)=="string"and#n>0 then
+i=n
+end
+end
+
+
+local m={getscreenshot,capturescreen,delta_screenshot}
+for n,o in ipairs(m)do
+if not i and type(o)=="function"then
+local p,q=pcall(o)
+if p and type(q)=="string"and#q>0 then
+i=q
+end
+end
+end
+
+
+if not i and type(writefile)=="function"and type(readfile)=="function"then
+local n="mcp_screenshot_temp.png"
+pcall(function()
+local o={screenshot,takescreenshot,getscreenshot,capturescreen}
+for p,q in ipairs(o)do
+if type(q)=="function"then
+local r=q()
+if r then
+writefile(n,r)
+i=readfile(n)
+break
+end
+end
+end
+end)
+pcall(function()
+if isfile and isfile(n)then
+delfile(n)
+end
+end)
+end
+
+
+if not i then
+local n={"screenshot://capture","vsphone://screenshot","delta://screenshot"}
+for o,p in ipairs(n)do
+if not i then
+local q,r=pcall(function()
+if type(http_get)=="function"then
+return http_get(p)
+end
+end)
+if q and type(r)=="string"and#r>100 then
+i=r
+end
+end
+end
+end
+
+if not i then
+return d:JSONEncode{
+error="Client-side screenshot is not supported by this executor. Set getgenv().MCP_ScreenshotFn = function() return <base64> end before loading the connector to add custom screenshot support.",
+success=false
+}
+end
+
+local n
+if i:match"^data:image/"then
+n=i
+elseif i:match"^[A-Za-z0-9+/=]+$"then
+n="data:image/"..j..";base64,"..i
+else
+n="data:image/"..j..";base64,"..e(i)
+end
+
+
+
+local o,p=pcall(function()
+return d:RequestAsync{
+Url="https://paste-void.lovable.app/api/upload-image",
+Method="POST",
+Headers={["Content-Type"]="application/json"},
+Body=d:JSONEncode{
+imageBase64=n,
+mimeType="image/"..j,
+}
+}
+end)
+
+if o and p and p.Success then
+local q,r=pcall(function()
+return d:JSONDecode(p.Body)
+end)
+if q and r and r.directUrl then
+return d:JSONEncode{
+imageUrl=r.directUrl,
+mimeType="image/"..j,
+success=true,
+width=g,
+source="client-upload"
+}
+end
+end
+
+
+return d:JSONEncode{
+imageBase64=n,
+mimeType="image/"..j,
+success=true,
+width=g,
+source="client"
 }
 end)
 end end function a.r():typeof(__modImpl())local b=a.cache.r if not b then b={c=__modImpl()}a.cache.r=b end return b.c end end do local function __modImpl()
+
+local b=game:GetService"Players"
+local c=game:GetService"Workspace"
+
+local d={
+quest={"quest","mission","objective","task","daily","challenge"},
+shop={"shop","store","market","buy","purchase","merchant","vendor"},
+collection={"collect","gather","harvest","mine","chop","farm","drop","loot","pickup"},
+submit={"submit","turnin","turn_in","deliver","claim","reward","complete"},
+teleport={"teleport","portal","warp","travel","fasttravel","fast_travel"},
+npc={"npc","dialog","talk","conversation","speaker"},
+zone={"zone","area","region","territory","spawn","safe"},
+currency={"currency","coin","money","cash","gem","diamond","gold"},
+inventory={"inventory","backpack","storage","item","tool","equip"},
+upgrade={"upgrade","enhance","enchant","forge","craft","rebirth","prestige"},
+pet={"pet","egg","hatch","companion","creature"},
+trading={"trade","exchange","swap"},
+leaderboard={"leaderboard","ranking","topplayer"},
+}
+
+local function safeGetFullName(e)
+local f,g=pcall(function()return e:GetFullName()end)
+return f and g or tostring(e)
+end
+
+return function(e,f)
+
+f:BindToType("get-player-state",function(g)
+local h=b.LocalPlayer
+if not h then
+return{error="No local player found."}
+end
+
+local i=h.Character
+local j=i and i:FindFirstChildOfClass"Humanoid"
+local k=i and i:FindFirstChild"HumanoidRootPart"
+
+local l
+local m=h:FindFirstChild"leaderstats"
+if m then
+l={}
+for n,o in m:GetChildren()do
+local p
+pcall(function()p=o.Value end)
+l[o.Name]={value=p,className=o.ClassName}
+end
+end
+
+local n
+pcall(function()
+local o=h:GetAttributes()
+if next(o)then
+n={}
+for p,q in o do
+n[p]=q
+end
+end
+end)
+
+local o
+if h.Backpack then
+o={}
+for p,q in h.Backpack:GetChildren()do
+table.insert(o,{name=q.Name,className=q.ClassName})
+end
+end
+
+local p
+if i then
+local q=i:FindFirstChildOfClass"Tool"
+if q then p=q.Name end
+end
+
+local q={}
+for r,s in h:GetChildren()do
+if s:IsA"Folder"or s:IsA"Configuration"then
+local t={name=s.Name,className=s.ClassName,children={}}
+for u,v in s:GetChildren()do
+local w
+pcall(function()w=v.Value end)
+table.insert(t.children,{name=v.Name,className=v.ClassName,value=w})
+end
+if#t.children>0 then
+table.insert(q,t)
+end
+end
+end
+
+local r={}
+local s=h:FindFirstChildOfClass"PlayerGui"
+if s then
+for t,u in s:GetChildren()do
+if u:IsA"ScreenGui"then
+local v=false
+pcall(function()v=u.Enabled end)
+if v then
+table.insert(r,{name=u.Name,path=safeGetFullName(u),childCount=#u:GetChildren()})
+end
+end
+end
+end
+
+local t={}
+if k then
+local u=k.Position
+for v,w in c:GetDescendants()do
+if#t>=15 then break end
+if w:IsA"BasePart"or w:IsA"Model"then
+local x
+pcall(function()
+if w:IsA"BasePart"then
+x=w.Position
+elseif w:IsA"Model"and w.PrimaryPart then
+x=w.PrimaryPart.Position
+end
+end)
+if x then
+local y=(u-x).Magnitude
+if y<=50 then
+local z=w.Name:lower()
+local A=false
+for B,C in pairs(d)do
+for D,E in ipairs(C)do
+if string.find(z,E,1,true)then A=true break end
+end
+if A then break end
+end
+local B=false
+if w:IsA"Model"then
+pcall(function()B=w:FindFirstChildOfClass"Humanoid"~=nil end)
+end
+if A or B then
+table.insert(t,{
+name=w.Name,className=w.ClassName,
+path=safeGetFullName(w),distance=math.floor(y),
+hasHumanoid=B,
+})
+end
+end
+end
+end
+end
+end
+
+local u=c.CurrentCamera
+local v
+if u then
+v={subject=nil,cameraType=nil}
+pcall(function()
+if u.CameraSubject then v.subject=tostring(u.CameraSubject)end
+v.cameraType=tostring(u.CameraType)
+end)
+end
+
+return{
+player={
+name=h.Name,userId=h.UserId,
+displayName=h.DisplayName,accountAge=h.AccountAge,
+team=h.Team and h.Team.Name or nil,
+},
+character=i and{
+name=i.Name,
+health=j and j.Health or nil,
+maxHealth=j and j.MaxHealth or nil,
+walkSpeed=j and j.WalkSpeed or nil,
+jumpPower=j and j.JumpPower or nil,
+state=j and tostring(j:GetState())or nil,
+position=k and{
+x=math.floor(k.Position.X*10)/10,
+y=math.floor(k.Position.Y*10)/10,
+z=math.floor(k.Position.Z*10)/10,
+}or nil,
+}or nil,
+leaderstats=l,
+attributes=n,
+backpack=o,
+equippedTool=p,
+playerDataFolders=#q>0 and q or nil,
+visibleGuis=#r>0 and r or nil,
+nearby=#t>0 and t or nil,
+camera=v,
+}
+end)
+
+f:BindToType("get-game-guis",function(g)
+local h=b.LocalPlayer
+if not h then return{error="No local player found."}end
+
+local i=g.includeHidden==true
+local j=math.max(1,math.min(tonumber(g.maxDepth)or 3,6))
+local k=math.max(1,math.min(tonumber(g.limit)or 10,30))
+local l=g.guiFilter or""
+
+local m=h:FindFirstChildOfClass"PlayerGui"
+if not m then return{error="No PlayerGui found."}end
+
+local n={}
+
+for o,p in m:GetChildren()do
+if#n>=k then break end
+if p:IsA"ScreenGui"then
+local q=false
+pcall(function()q=p.Enabled end)
+if q or i then
+if l~=""and not string.find(string.lower(p.Name),string.lower(l),1,true)then
+continue
+end
+
+local r,s,t,u={},{},{},{}
+
+local function scanChildren(v,w)
+if w>j then return end
+for x,y in v:GetChildren()do
+if#r>=20 and#s>=20 and#t>=10 then break end
+if y:IsA"TextButton"or y:IsA"ImageButton"then
+local z,A
+pcall(function()z=y.AbsolutePosition;A=y.AbsoluteSize end)
+table.insert(r,{
+name=y.Name,
+text=y:IsA"TextButton"and y.Text or nil,
+path=safeGetFullName(y),visible=y.Visible,
+position=z and{x=math.floor(z.X),y=math.floor(z.Y)}or nil,
+size=A and{w=math.floor(A.X),h=math.floor(A.Y)}or nil,
+})
+elseif y:IsA"TextLabel"and#s<20 then
+table.insert(s,{name=y.Name,text=y.Text,path=safeGetFullName(y),visible=y.Visible})
+elseif y:IsA"TextBox"and#t<10 then
+table.insert(t,{name=y.Name,text=y.Text,placeholderText=y.PlaceholderText,path=safeGetFullName(y),visible=y.Visible})
+elseif y:IsA"ImageLabel"and#u<10 then
+table.insert(u,{name=y.Name,path=safeGetFullName(y),visible=y.Visible})
+end
+scanChildren(y,w+1)
+end
+end
+scanChildren(p,0)
+
+table.insert(n,{
+name=p.Name,path=safeGetFullName(p),enabled=q,childCount=#p:GetChildren(),
+buttons=#r>0 and r or nil,
+labels=#s>0 and s or nil,
+textBoxes=#t>0 and t or nil,
+images=#u>0 and u or nil,
+})
+end
+end
+end
+
+return{count=#n,results=n}
+end)
+
+f:BindToType("trace-game-activity",function(g)
+local h=math.max(1,math.min(tonumber(g.duration)or 5,30))
+local i=b.LocalPlayer
+if not i then return{error="No local player found."}end
+
+local function snapshot()
+local j=i.Character
+local k=j and j:FindFirstChildOfClass"Humanoid"
+local l=j and j:FindFirstChild"HumanoidRootPart"
+
+local m,n,o={},{},{}
+local p=i:FindFirstChild"leaderstats"
+if p then
+for q,r in p:GetChildren()do
+local s
+pcall(function()s=r.Value end)
+m[r.Name]=s
+end
+end
+pcall(function()
+for q,r in i:GetAttributes()do n[q]=r end
+end)
+if i.Backpack then
+for q,r in i.Backpack:GetChildren()do table.insert(o,r.Name)end
+end
+
+local q
+if j then
+local r=j:FindFirstChildOfClass"Tool"
+if r then q=r.Name end
+end
+
+local r={}
+local s=i:FindFirstChildOfClass"PlayerGui"
+if s then
+for t,u in s:GetChildren()do
+if u:IsA"ScreenGui"then
+local v=false
+pcall(function()v=u.Enabled end)
+if v then table.insert(r,u.Name)end
+end
+end
+end
+
+local t={}
+for u,v in i:GetChildren()do
+if v:IsA"Folder"then
+for w,x in v:GetChildren()do
+if x:IsA"ValueBase"then
+local y
+pcall(function()y=x.Value end)
+t[x:GetFullName()]=y
+end
+end
+end
+end
+
+local u
+if l then
+u={x=math.floor(l.Position.X*10)/10,y=math.floor(l.Position.Y*10)/10,z=math.floor(l.Position.Z*10)/10}
+end
+
+return{
+stats=m,attributes=n,tools=o,equipped=q,
+visibleGuis=r,folderValues=t,position=u,
+health=k and k.Health or nil,
+}
+end
+
+local j=snapshot()
+task.wait(h)
+local k=snapshot()
+local l={}
+
+for m,n in j.stats do
+local o=k.stats[m]
+if n~=o then
+table.insert(l,{type="leaderstat",name=m,before=n,after=o})
+end
+end
+for m,n in k.stats do
+if j.stats[m]==nil then
+table.insert(l,{type="leaderstat",name=m,before=nil,after=n})
+end
+end
+
+for m,n in j.attributes do
+if n~=k.attributes[m]then
+table.insert(l,{type="attribute",name=m,before=n,after=k.attributes[m]})
+end
+end
+
+local m,n={},{}
+for o,p in j.tools do m[p]=true end
+for o,p in k.tools do n[p]=true end
+for o,p in j.tools do if not n[p]then table.insert(l,{type="tool_removed",name=p})end end
+for o,p in k.tools do if not m[p]then table.insert(l,{type="tool_added",name=p})end end
+
+if j.equipped~=k.equipped then
+table.insert(l,{type="equipped",before=j.equipped,after=k.equipped})
+end
+
+local o,p={},{}
+for q,r in j.visibleGuis do o[r]=true end
+for q,r in k.visibleGuis do p[r]=true end
+for q,r in j.visibleGuis do if not p[r]then table.insert(l,{type="gui_hidden",name=r})end end
+for q,r in k.visibleGuis do if not o[r]then table.insert(l,{type="gui_shown",name=r})end end
+
+for q,r in j.folderValues do
+if r~=k.folderValues[q]then
+table.insert(l,{type="data_changed",path=q,before=r,after=k.folderValues[q]})
+end
+end
+for q,r in k.folderValues do
+if j.folderValues[q]==nil then
+table.insert(l,{type="data_added",path=q,after=r})
+end
+end
+
+if j.position and k.position then
+local q,r,s=k.position.x-j.position.x,k.position.y-j.position.y,k.position.z-j.position.z
+local t=math.sqrt(q*q+r*r+s*s)
+if t>1 then
+table.insert(l,{type="position_change",distance=math.floor(t*10)/10,before=j.position,after=k.position})
+end
+end
+
+if j.health~=k.health then
+table.insert(l,{type="health",before=j.health,after=k.health})
+end
+
+local q
+local r=getgenv().Cobalt
+if r and r.shared and r.shared.Logs then
+q={mode="cobalt",outgoing=0,incoming=0}
+pcall(function()
+for s,t in r.shared.Logs.Outgoing do
+if typeof(s)=="Instance"then q.outgoing+=#t.Calls end
+end
+for s,t in r.shared.Logs.Incoming do
+if typeof(s)=="Instance"then q.incoming+=#t.Calls end
+end
+end)
+elseif getgenv().MCP_BasicRemoteSpy then
+q={mode="basic",message="Basic remote inventory mode active."}
+end
+
+return{duration=h,changes=l,changeCount=#l,remoteActivity=q,before=j,after=k}
+end)
+
+f:BindToType("find-game-systems",function(g)
+local h=g.keywords or{}
+local i=math.max(1,math.min(tonumber(g.limit)or 20,100))
+local j=math.max(1,math.min(tonumber(g.maxDepth)or 8,20))
+
+local k={}
+if#h==0 then
+for l,m in pairs(d)do k[l]=d[l]end
+else
+for l,m in h do
+local n=string.lower(m)
+if d[n]then k[n]=d[n]end
+end
+if next(k)==nil then
+for l,m in pairs(d)do k[l]=d[l]end
+end
+end
+
+local l={}
+local m={}
+
+local function checkInstance(n,o)
+if o>j then return end
+if#l>=i*2 then return end
+
+local p=string.lower(n.Name)
+for q,r in k do
+for s,t in r do
+if string.find(p,t,1,true)then
+local u=n:GetDebugId()
+if not m[u]then
+m[u]=true
+local v={}
+pcall(function()
+if n:IsA"ValueBase"then v.value=n.Value
+elseif n:IsA"RemoteEvent"or n:IsA"RemoteFunction"then v.remoteType=n.ClassName
+elseif n:IsA"BasePart"or n:IsA"Model"then
+local w
+if n:IsA"BasePart"then w=n.Position
+elseif n.PrimaryPart then w=n.PrimaryPart.Position end
+if w then
+v.position={x=math.floor(w.X*10)/10,y=math.floor(w.Y*10)/10,z=math.floor(w.Z*10)/10}
+end
+local x=n:FindFirstChildOfClass"Humanoid"
+if x then v.isNPC=true;v.health=x.Health end
+elseif n:IsA"ScreenGui"then
+v.enabled=n.Enabled;v.childCount=#n:GetChildren()
+end
+end)
+table.insert(l,{
+name=n.Name,className=n.ClassName,path=safeGetFullName(n),
+category=q,matchedKeyword=t,
+extraInfo=next(v)~=nil and v or nil,
+})
+end
+break
+end
+end
+end
+
+for q,r in n:GetChildren()do
+if#l>=i*2 then break end
+checkInstance(r,o+1)
+end
+end
+
+local n={
+game:GetService"ReplicatedStorage",c,
+}
+local o=b.LocalPlayer
+if o then table.insert(n,o)end
+
+for p,q in n do
+pcall(function()checkInstance(q,0)end)
+end
+
+if#l>i then
+local p={}
+for q=1,i do p[q]=l[q]end
+l=p
+end
+
+local p={}
+for q,r in l do
+if not p[r.category]then p[r.category]={}end
+table.insert(p[r.category],r)
+end
+
+return{
+count=#l,categories=p,results=l,
+availableCategories=(function()
+local q={}
+for r,s in pairs(d)do table.insert(q,r)end
+table.sort(q)
+return q
+end)(),
+}
+end)
+end end function a.s():typeof(__modImpl())local b=a.cache.s if not b then b={c=__modImpl()}a.cache.s=b end return b.c end end do local function __modImpl()
+
+local b=game:GetService"Players"
+local c=game:GetService"Workspace"
+game:GetService"RunService"
+
+local d={
+"anticheat","anti_cheat","anti-cheat","antihack","anti-hack",
+"security","secure","protector","protect",
+"detector","detect","validator","validate",
+"sanity","flag","flagger","reporter",
+"kick","ban","crash","shutdown",
+"exploit","hack","cheat","suspect",
+"byfron","hyperion","ac_module",
+}
+
+local e={
+{pattern="Player:Kick",category="kick",severity="high"},
+{pattern=":Kick(",category="kick",severity="high"},
+{pattern="Ban",category="ban",severity="high"},
+{pattern="FireServer",category="remote_report",severity="medium"},
+{pattern="InvokeServer",category="remote_report",severity="medium"},
+{pattern="WalkSpeed",category="speed_check",severity="medium"},
+{pattern="JumpPower",category="jump_check",severity="medium"},
+{pattern="HipHeight",category="movement_check",severity="medium"},
+{pattern="CFrame",category="position_check",severity="medium"},
+{pattern="Magnitude",category="distance_check",severity="medium"},
+{pattern="HumanoidRootPart",category="position_check",severity="low"},
+{pattern="teleport",category="teleport_check",severity="medium"},
+{pattern="noclip",category="noclip_check",severity="medium"},
+{pattern="fly",category="fly_check",severity="medium"},
+{pattern="speed",category="speed_check",severity="medium"},
+{pattern="getgenv",category="executor_detect",severity="high"},
+{pattern="hookfunction",category="executor_detect",severity="high"},
+{pattern="hookmetamethod",category="executor_detect",severity="high"},
+{pattern="identifyexecutor",category="executor_detect",severity="high"},
+{pattern="getrenv",category="executor_detect",severity="high"},
+{pattern="getgc",category="executor_detect",severity="medium"},
+{pattern="getconnections",category="executor_detect",severity="medium"},
+{pattern="getloadedmodules",category="executor_detect",severity="medium"},
+{pattern="getscripts",category="executor_detect",severity="medium"},
+{pattern="debug.getupvalues",category="executor_detect",severity="medium"},
+{pattern="getfenv",category="executor_detect",severity="low"},
+{pattern="sethiddenproperty",category="executor_detect",severity="medium"},
+{pattern="gethiddenproperty",category="executor_detect",severity="medium"},
+{pattern="BasePart",category="physics_check",severity="low"},
+{pattern="AssemblyLinearVelocity",category="velocity_check",severity="medium"},
+{pattern="AssemblyAngularVelocity",category="velocity_check",severity="medium"},
+{pattern="RaycastParams",category="raycast_check",severity="low"},
+{pattern="GetPropertyChangedSignal",category="property_check",severity="medium"},
+{pattern="CharacterAdded",category="character_check",severity="low"},
+{pattern="Humanoid.StateChanged",category="state_check",severity="low"},
+{pattern="request",category="http_check",severity="high"},
+{pattern="HttpPost",category="http_check",severity="high"},
+{pattern="HttpGet",category="http_check",severity="high"},
+}
+
+local function safeGetFullName(f)
+local g,h=pcall(function()return f:GetFullName()end)
+return g and h or tostring(f)
+end
+
+local function safeDecompile(f)
+if type(decompile)=="function"then
+local g,h=pcall(decompile,f)
+if g and type(h)=="string"and#h>0 then
+return h
+end
+end
+local g,h=pcall(function()return f.Source end)
+if g and type(h)=="string"and#h>0 then
+return h
+end
+return nil
+end
+
+return function(f,g)
+
+g:BindToType("scan-anticheat",function(h)
+local i=math.max(5,math.min(tonumber(h.maxScripts)or 30,100))
+local j=h.scanSource~=false
+local k={
+nameMatches={},
+sourceMatches={},
+remoteReports={},
+summary={},
+}
+
+local l={}
+
+local function checkName(m,n)
+local o=string.lower(m)
+for p,q in d do
+if string.find(o,q,1,true)then
+local r=n:GetDebugId()
+if not l[r]then
+l[r]=true
+local s={}
+pcall(function()
+if n:IsA"ModuleScript"then
+s.scriptType="ModuleScript"
+elseif n:IsA"LocalScript"then
+s.scriptType="LocalScript"
+elseif n:IsA"Script"then
+s.scriptType="Script"
+elseif n:IsA"RemoteEvent"or n:IsA"RemoteFunction"then
+s.remoteType=n.ClassName
+elseif n:IsA"BasePart"or n:IsA"Model"then
+local t
+if n:IsA"BasePart"then
+t=n.Position
+elseif n.PrimaryPart then
+t=n.PrimaryPart.Position
+end
+if t then
+s.position={x=math.floor(t.X),y=math.floor(t.Y),z=math.floor(t.Z)}
+end
+end
+end)
+table.insert(k.nameMatches,{
+name=m,
+className=n.ClassName,
+path=safeGetFullName(n),
+matchedPattern=q,
+extra=next(s)~=nil and s or nil,
+})
+end
+break
+end
+end
+end
+
+local m={
+game:GetService"ReplicatedStorage",
+c,
+game:GetService"StarterPlayer",
+}
+local n=b.LocalPlayer
+if n then
+table.insert(m,n)
+local o=n:FindFirstChildOfClass"PlayerGui"
+if o then table.insert(m,o)end
+end
+
+for o,p in m do
+pcall(function()
+for q,r in p:GetDescendants()do
+checkName(r.Name,r)
+end
+end)
+end
+
+if j then
+local o=0
+local p={}
+
+pcall(function()
+if type(getscripts)=="function"then
+for q,r in getscripts()do
+if#p>=i*2 then break end
+table.insert(p,r)
+end
+end
+end)
+pcall(function()
+if type(getloadedmodules)=="function"then
+for q,r in getloadedmodules()do
+if#p>=i*2 then break end
+table.insert(p,r)
+end
+end
+end)
+
+for q,r in p do
+if o>=i then break end
+local s=""
+pcall(function()s=r.Name end)
+local t=safeGetFullName(r)
+
+local u=safeDecompile(r)
+if u then
+o+=1
+local v={}
+for w,x in e do
+if string.find(u,x.pattern,1,true)then
+if not v[x.category]then
+v[x.category]={}
+end
+table.insert(v[x.category],{
+pattern=x.pattern,
+severity=x.severity,
+})
+end
+end
+
+if next(v)~=nil then
+local w={}
+local x="low"
+for y,z in v do
+table.insert(w,y)
+for A,B in z do
+if B.severity=="high"then x="high"
+elseif B.severity=="medium"and x~="high"then x="medium"
+end
+end
+end
+
+local y
+for z,A in e do local
+B=string.find(u,A.pattern,1,true)
+if B then
+local C=B
+while C>1 and string.sub(u,C-1,C-1)~="\n"do
+C=C-1
+end
+local D=string.find(u,"\n",B,true)
+if not D then D=math.min(B+200,#u)end
+y=string.sub(u,C,math.min(D,C+200))
+break
+end
+end
+
+table.insert(k.sourceMatches,{
+scriptName=s,
+scriptPath=t,
+categories=w,
+maxSeverity=x,
+matchedPatterns=v,
+snippet=y,
+})
+end
+end
+end
+k.summary.scriptsScanned=o
+end
+
+local function checkRemotesForReporting()
+local o={}
+pcall(function()
+for p,q in m do
+for r,s in q:GetDescendants()do
+if s:IsA"RemoteEvent"or s:IsA"RemoteFunction"then
+local t=string.lower(s.Name)
+for u,v in ipairs{"report","flag","kick","ban","detect","exploit","cheat","log","alert","notify","webhook"}do
+if string.find(t,v,1,true)then
+table.insert(o,{
+name=s.Name,
+className=s.ClassName,
+path=safeGetFullName(s),
+matchedKeyword=v,
+})
+break
+end
+end
+end
+end
+end
+end)
+return o
+end
+k.remoteReports=checkRemotesForReporting()
+
+local o={high=0,medium=0,low=0}
+for p,q in k.sourceMatches do
+o[q.maxSeverity]=(o[q.maxSeverity]or 0)+1
+end
+
+k.summary.nameMatches=#k.nameMatches
+k.summary.sourceMatches=#k.sourceMatches
+k.summary.remoteReports=#k.remoteReports
+k.summary.highSeverity=o.high
+k.summary.mediumSeverity=o.medium
+k.summary.lowSeverity=o.low
+k.summary.likelyHasAntiCheat=#k.nameMatches>0 or#k.sourceMatches>0
+
+return k
+end)
+
+g:BindToType("anticheat-bypass",function(h)
+local i=h.target or"auto"
+local j=h.mode or"safe"
+
+local k
+
+if i=="auto"then
+local l=math.max(5,math.min(tonumber(h.maxScripts)or 20,50))
+local m=0
+local n={}
+
+pcall(function()
+if type(getscripts)=="function"then
+for o,p in getscripts()do
+if#n>=l*2 then break end
+table.insert(n,p)
+end
+end
+end)
+pcall(function()
+if type(getloadedmodules)=="function"then
+for o,p in getloadedmodules()do
+if#n>=l*2 then break end
+table.insert(n,p)
+end
+end
+end)
+
+local o={}
+
+for p,q in n do
+if m>=l then break end
+local r=""
+local s=""
+pcall(function()r=q.Name end)
+s=safeGetFullName(q)
+
+local t=string.lower(r)
+local u=false
+for v,w in d do
+if string.find(t,w,1,true)then
+u=true
+break
+end
+end
+
+local v=safeDecompile(q)
+if v then
+m+=1
+if not u then
+for w,x in e do
+if x.severity=="high"and string.find(v,x.pattern,1,true)then
+u=true
+break
+end
+end
+end
+
+if u then
+local w={}
+for x,y in e do
+if string.find(v,y.pattern,1,true)then
+if not w[y.category]then
+w[y.category]={}
+end
+table.insert(w[y.category],y.pattern)
+end
+end
+
+table.insert(o,{
+name=r,
+path=s,
+script=q,
+checks=w,
+})
+end
+end
+end
+
+k=o
+end
+
+local l={}
+local m=type(hookmetamethod)=="function"
+local n=type(newcclosure)=="function"
+local o=type(hookfunction)=="function"
+local p=type(setreadonly)=="function"or type(make_writeable)=="function"or type(set_readonly)=="function"
+
+table.insert(l,"-- Anti-Cheat Bypass Script")
+table.insert(l,"-- Detected anti-cheat components: "..tostring(#k))
+table.insert(l,"-- Bypass mode: "..j)
+table.insert(l,"-- Executor capabilities: hookmetamethod="..tostring(m)..", hookfunction="..tostring(o)..", newcclosure="..tostring(n))
+table.insert(l,"")
+
+if#k==0 then
+table.insert(l,"-- No anti-cheat scripts detected by name or source scan.")
+table.insert(l,"-- If you suspect there's an anti-cheat, try scanning with scan-anticheat tool first.")
+table.insert(l,"-- Applying generic protections anyway:")
+table.insert(l,"")
+
+if m then
+table.insert(l,"local mt = getrawmetatable(game)")
+table.insert(l,"local oldNamecall = mt.__namecall")
+table.insert(l,"setreadonly(mt, false)")
+table.insert(l,"hookmetamethod(game, '__namecall', newcclosure(function(self, ...) ")
+table.insert(l,"    local method = getnamecallmethod()")
+table.insert(l,"    local args = {...}")
+table.insert(l,"    if method == 'FireServer' or method == 'InvokeServer' then")
+table.insert(l,"        local remoteName = ''")
+table.insert(l,"        pcall(function() remoteName = self.Name end)")
+table.insert(l,"        local nameLower = string.lower(remoteName)")
+table.insert(l,"        for _, kw in ipairs({'report', 'flag', 'kick', 'ban', 'detect', 'exploit', 'cheat', 'alert', 'webhook'}) do")
+table.insert(l,"            if string.find(nameLower, kw, 1, true) then")
+table.insert(l,"                return -- Block the remote call")
+table.insert(l,"            end")
+table.insert(l,"        end")
+table.insert(l,"    end")
+table.insert(l,"    return oldNamecall(self, ...)")
+table.insert(l,"end))")
+table.insert(l,"setreadonly(mt, true)")
+end
+else
+for q,r in k do
+table.insert(l,"-- Bypassing: "..r.name.." ("..r.path..")")
+local s=r.checks.kick~=nil
+local t=r.checks.ban~=nil
+local u=r.checks.speed_check~=nil
+local v=r.checks.position_check~=nil
+local w=r.checks.executor_detect~=nil
+local x=r.checks.remote_report~=nil
+local y=r.checks.velocity_check~=nil
+local z=r.checks.property_check~=nil
+
+if j=="safe"then
+if o then
+table.insert(l,"pcall(function()")
+table.insert(l,"    local s = getscripts and getscripts() or {}")
+table.insert(l,"    for _, script in ipairs(s) do")
+table.insert(l,"        pcall(function()")
+table.insert(l,"            local name = string.lower(script.Name)")
+table.insert(l,"            if name:find('"..string.lower(r.name).."', 1, true) then")
+table.insert(l,"                if script.Disabled ~= nil then script.Disabled = true end")
+table.insert(l,"            end")
+table.insert(l,"        end)")
+table.insert(l,"    end")
+table.insert(l,"end)")
+end
+
+if s or t then
+table.insert(l,"pcall(function()")
+table.insert(l,"    local player = game.Players.LocalPlayer")
+table.insert(l,"    local mt = getrawmetatable(player)")
+if p then table.insert(l,"    setreadonly(mt, false)")end
+table.insert(l,"    local oldIndex = mt.__index")
+if m and n then
+table.insert(l,"    hookmetamethod(player, '__index', newcclosure(function(self, key)")
+table.insert(l,"        return oldIndex(self, key)")
+table.insert(l,"    end))")
+table.insert(l,"    local oldNamecall = mt.__namecall")
+table.insert(l,"    hookmetamethod(game, '__namecall', newcclosure(function(self, ...)")
+table.insert(l,"        local method = getnamecallmethod()")
+table.insert(l,"        if method == 'Kick' then return nil end")
+table.insert(l,"        return oldNamecall(self, ...)")
+table.insert(l,"    end))")
+end
+if p then table.insert(l,"    setreadonly(mt, true)")end
+table.insert(l,"end)")
+end
+
+if u or v or y then
+table.insert(l,"pcall(function()")
+table.insert(l,"    local player = game.Players.LocalPlayer")
+table.insert(l,"    local char = player.Character or player.CharacterAdded:Wait()")
+table.insert(l,"    local humanoid = char:WaitForChild('Humanoid')")
+if m and n then
+table.insert(l,"    local mt = getrawmetatable(humanoid)")
+if p then table.insert(l,"    setreadonly(mt, false)")end
+table.insert(l,"    local oldIndex = mt.__index")
+table.insert(l,"    hookmetamethod(humanoid, '__index', newcclosure(function(self, key)")
+table.insert(l,"        if key == 'WalkSpeed' or key == 'JumpPower' or key == 'JumpHeight' then")
+table.insert(l,"            return 16 -- Return default WalkSpeed")
+table.insert(l,"        end")
+table.insert(l,"        if key == 'HipHeight' then return 2 end")
+table.insert(l,"        return oldIndex(self, key)")
+table.insert(l,"    end))")
+if p then table.insert(l,"    setreadonly(mt, true)")end
+end
+table.insert(l,"end)")
+end
+
+if w then
+table.insert(l,"pcall(function()")
+table.insert(l,"    getgenv().identifyexecutor = function() return 'Roblox' end")
+table.insert(l,"    getgenv().getrenv = function() return {} end")
+table.insert(l,"    getgenv().getgc = function() return {} end")
+if o and n then
+table.insert(l,"    hookfunction(getfenv, newcclosure(function() return setmetatable({}, {__index = function() return function() end end}) end))")
+end
+table.insert(l,"end)")
+end
+
+if x then
+if m and n then
+table.insert(l,"pcall(function()")
+table.insert(l,"    local mt = getrawmetatable(game)")
+if p then table.insert(l,"    setreadonly(mt, false)")end
+table.insert(l,"    local oldNamecall = mt.__namecall")
+table.insert(l,"    hookmetamethod(game, '__namecall', newcclosure(function(self, ...)")
+table.insert(l,"        local method = getnamecallmethod()")
+table.insert(l,"        if method == 'FireServer' or method == 'InvokeServer' then")
+table.insert(l,"            local remoteName = ''")
+table.insert(l,"            pcall(function() remoteName = self.Name end)")
+table.insert(l,"            local nameLower = string.lower(remoteName)")
+table.insert(l,"            for _, kw in ipairs({'report', 'flag', 'kick', 'ban', 'detect', 'exploit', 'cheat', 'alert', 'webhook', 'log'}) do")
+table.insert(l,"                if string.find(nameLower, kw, 1, true) then")
+table.insert(l,"                    return -- Block report")
+table.insert(l,"                end")
+table.insert(l,"            end")
+table.insert(l,"        end")
+table.insert(l,"        return oldNamecall(self, ...)")
+table.insert(l,"    end))")
+if p then table.insert(l,"    setreadonly(mt, true)")end
+table.insert(l,"end)")
+end
+end
+
+if z then
+table.insert(l,"pcall(function()")
+table.insert(l,"    local player = game.Players.LocalPlayer")
+table.insert(l,"    local char = player.Character")
+if m and n then
+if char then
+table.insert(l,"    local hrp = char:FindFirstChild('HumanoidRootPart')")
+table.insert(l,"    if hrp then")
+table.insert(l,"        local mt = getrawmetatable(hrp)")
+if p then table.insert(l,"        setreadonly(mt, false)")end
+table.insert(l,"        local oldIndex = mt.__index")
+table.insert(l,"        hookmetamethod(hrp, '__index', newcclosure(function(self, key)")
+table.insert(l,"            if key == 'CFrame' or key == 'Position' then")
+table.insert(l,"                -- Return last known good position to fool checks")
+table.insert(l,"                return oldIndex(self, key)")
+table.insert(l,"            end")
+table.insert(l,"            if key == 'AssemblyLinearVelocity' or key == 'AssemblyAngularVelocity' then")
+table.insert(l,"                return Vector3.zero")
+table.insert(l,"            end")
+table.insert(l,"            return oldIndex(self, key)")
+table.insert(l,"        end))")
+if p then table.insert(l,"        setreadonly(mt, true)")end
+table.insert(l,"    end")
+end
+end
+table.insert(l,"end)")
+end
+elseif j=="aggressive"then
+table.insert(l,"pcall(function()")
+if o then
+table.insert(l,"    local s = getscripts and getscripts() or {}")
+table.insert(l,"    for _, script in ipairs(s) do")
+table.insert(l,"        pcall(function()")
+table.insert(l,"            local name = string.lower(script.Name)")
+table.insert(l,"            if name:find('"..string.lower(r.name).."', 1, true) then")
+table.insert(l,"                if script.Disabled ~= nil then script.Disabled = true end")
+table.insert(l,"            end")
+table.insert(l,"        end)")
+table.insert(l,"    end")
+end
+table.insert(l,"end)")
+end
+
+table.insert(l,"")
+end
+end
+
+table.insert(l,"")
+table.insert(l,"-- Bypass applied. Monitor for kicks/bans and adjust if needed.")
+
+local q=table.concat(l,"\n")
+
+return{
+bypassCode=q,
+detectedCount=#k,
+detectedComponents=(function()
+local r={}
+for s,t in k do
+local u={}
+for v,w in t.checks do
+table.insert(u,v)
+end
+table.insert(r,{
+name=t.name,
+path=t.path,
+checks=u,
+})
+end
+return r
+end)(),
+executorCapabilities={
+hookmetamethod=m,
+hookfunction=o,
+newcclosure=n,
+setreadonly=p,
+},
+mode=j,
+warning="Review the bypass code before executing. Some anti-cheat systems are server-side and cannot be bypassed from the client. If the anti-cheat uses server-side validation, client hooks may not be sufficient.",
+}
+end)
+
+end end function a.t():typeof(__modImpl())local b=a.cache.t if not b then b={c=__modImpl()}a.cache.t=b end return b.c end end do local function __modImpl()
 
 return function(b)
 local c=b.CreateBridge
@@ -2895,63 +3959,72 @@ local h=b.ResetScriptMappingState
 local i=b.StartScriptMapping
 local j=b.StartFailedScriptResync
 local k=b.ResumeDeferredScriptMappings
-
+local l=1
+local m=30
 while true do
-local l,m=pcall(c)
+local n,o=pcall(c)
 
-if not l then
-task.wait(3)
+if not n then
+task.wait(l)
+l=math.min(l*1.5,m)
 continue
 end
 
-local n=d(m)
-if n then
-e.bridge=m
+l=1
+
+local p=d(o)
+if p then
+e.bridge=o
 f()
 
-if e.clientId~=n then
-h(n)
+if e.clientId~=p then
+h(p)
 end
 
 if not getgenv().DisableInitialScriptDecompMapping then
-i(n)
+i(p)
 j()
 k()
 g()
 else
-e.clientId=n
+e.clientId=p
 e.disabled=true
 e.stateVersion+=1
 g()
 end
 end
 
-local o={a.m()
+local q={a.m()
 ,a.n()
 ,a.o()
 ,a.p()
 ,a.q()
 ,a.r()
+,a.s()
+,a.t()
 ,
 }
-for p,q in o do
-q(b,m)
+for r,s in q do
+s(b,o)
 end
 
-m:WaitForDisconnect()
+getgenv().MCP_ActiveBridge=o
+o:WaitForDisconnect()
+getgenv().MCP_ActiveBridge=nil
 
-if e.bridge==m then
+if e.bridge==o then
 e.bridge=nil
 end
-task.wait(1)
+task.wait(l)
+l=math.min(l*1.5,m)
 end
-end end function a.s():typeof(__modImpl())local b=a.cache.s if not b then b={c=__modImpl()}a.cache.s=b end return b.c end end end
-
-
-
+end end function a.u():typeof(__modImpl())local b=a.cache.u if not b then b={c=__modImpl()}a.cache.u=b end return b.c end end end
 
 if getgenv().MCP_Loaded==true then
+local b=getgenv().MCP_ActiveBridge
+if b~=nil and b.Connected==true then
 return
+end
 end
 
 getgenv().MCP_Loaded=true
@@ -2960,11 +4033,23 @@ local b=getgenv().BridgeURL or getgenv().bridgeurl or...or"localhost:16384"
 getgenv().BridgeURL=b
 getgenv().bridgeurl=b
 
-
 if not game:IsLoaded()then
 game.Loaded:Wait()
 end
 
+if getgenv().MCP_DisableAntiAFK~=true then
+local c=game:GetService"VirtualUser"
+local d=game:GetService"Players"
+local e=d.LocalPlayer
+if e then
+e.Idled:Connect(function()
+pcall(function()
+c:CaptureController()
+c:ClickButton2(Vector2.new())
+end)
+end)
+end
+end
 
 local c=cloneref or function(c)return c end
 
@@ -2978,16 +4063,12 @@ local j:HttpService=c(game:GetService"HttpService")
 local k:LogService=c(game:GetService"LogService")
 local l:Players=c(game:GetService"Players")
 
-
-
 local m
 do
 
 
 
-
 local n='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-
 
 m=base64encode or function(o)
 return((o:gsub('.',function(p)
@@ -3004,14 +4085,10 @@ end
 end
 
 
-
 local n=type(getscripthash)=="function"and getscripthash or nil
 local o=type(decompile)=="function"and decompile or nil
 
 local p=loadstring(game:HttpGet"https://raw.githubusercontent.com/chadhyatt/LuaEncode/refs/heads/master/src/LuaEncode.lua")()
-
-
-
 
 local q=8
 local r=60
@@ -3027,13 +4104,12 @@ return x and y or tostring(t)
 elseif w=="string"then
 if#t>s then
 return string.sub(t,1,s)
-.."…(+"..(#t-s).." chars omitted)"
+.."â¦(+"..(#t-s).." chars omitted)"
 end
 return t
 elseif w=="number"or w=="boolean"or w=="nil"then
 return t
 elseif w~="table"then
-
 return tostring(t)
 end
 
@@ -3070,8 +4146,6 @@ v[t]=nil
 return x
 end
 
-
-
 local function StripDecompilerBanner(t)
 if typeof(t)~="string"then return t end
 return(string.gsub(t,"^%s*%-%-[^\n]*[Dd]ecompiled[^\n]*\n","",1))
@@ -3079,12 +4153,10 @@ end
 
 local t=getnilinstances or function()return{}end
 
-
 local u=(
 typeof(WebSocket)~="nil"and
 typeof(WebSocket.connect)=="function"
 )and(getgenv().DisableWebSocket~=true)
-
 
 local function GenerateSessionGuid()
 local v,w=pcall(function()
@@ -3132,7 +4204,6 @@ sessionId=GetStableClientSessionId(),
 }
 end
 
-
 local v=a.a(){
 HttpService=j,
 BridgeURL=b,
@@ -3142,7 +4213,6 @@ SanitizeForOutput=SanitizeForOutput,
 LuaEncode=p,
 }
 local w=v.CreateBridge
-
 
 local x=a.b()
 local y=a.c()
@@ -3233,7 +4303,7 @@ task.wait(0.05)
 until os.clock()>U
 
 return nil
-end a.s()
+end a.u()
 
 {
 CreateBridge=w,
@@ -3253,4 +4323,6 @@ MarketplaceService=f,
 RobloxReplicatedStorage=d,
 VirtualInputManager=e,
 LuaEncode=p,
+HttpService=j,
+base64_encode=m,
 }

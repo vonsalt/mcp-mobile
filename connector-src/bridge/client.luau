@@ -6,7 +6,19 @@ local GetRegistrationInfo = context.GetRegistrationInfo
 local SanitizeForOutput = context.SanitizeForOutput
 local LuaEncode = context.LuaEncode
 
---// Base Bridge Class \\--
+-- Detect whether to use secure schemes (wss/https) for domain-based bridges
+local WS_SCHEME, HTTP_SCHEME do
+    local host = BridgeURL:match("^([^:/]+)") or BridgeURL
+    local isLocal = host == "localhost" or host == "127.0.0.1" or host == "::1"
+        or host:match("^192%.168%.") or host:match("^10%.") or host:match("^172%.")
+        or host:match("^%d+%.%d+%.%d+%.%d+$")
+    if isLocal then
+        WS_SCHEME, HTTP_SCHEME = "ws://", "http://"
+    else
+        WS_SCHEME, HTTP_SCHEME = "wss://", "https://"
+    end
+end
+
 local BaseBridge = {}; do
     BaseBridge.__index = BaseBridge
     
@@ -84,7 +96,7 @@ local BaseBridge = {}; do
             local response
             local thread = task.spawn(function()
                 local success, data = pcall(request, {
-                    Url = "http://" .. BridgeURL,
+                    Url = HTTP_SCHEME .. BridgeURL,
                     Method = "GET"
                 })
 
@@ -101,7 +113,6 @@ local BaseBridge = {}; do
                 return false
             end
     
-            -- 426 = Upgrade Required (WebSocket), 200 = HTTP mode
             if response.StatusCode == 426 or response.StatusCode == 200 then
                 return true
             end
@@ -117,14 +128,12 @@ local BaseBridge = {}; do
     end
 end
 
---// WebSocket Bridge \\--
 local WebSocketBridge = setmetatable({}, {__index = BaseBridge}); do
     WebSocketBridge.__index = WebSocketBridge
     
     function WebSocketBridge.new()
         local self = setmetatable({}, WebSocketBridge)
     
-        --// Yield until the server is alive with exponential backoff \\--
         local retryDelay = 0.5
         local maxRetryDelay = 5
         local maxAttempts = 10
@@ -139,11 +148,10 @@ local WebSocketBridge = setmetatable({}, {__index = BaseBridge}); do
             retryDelay = math.min(retryDelay * 1.5, maxRetryDelay)
         end
     
-        --// Connect to the server with timeout \\--
         local wsConnection = nil
         local connectionThread = task.spawn(function()
             local success, result = pcall(function()
-                return WebSocket.connect("ws://" .. BridgeURL)
+                return WebSocket.connect(WS_SCHEME .. BridgeURL)
             end)
             if success then
                 wsConnection = result
@@ -163,13 +171,17 @@ local WebSocketBridge = setmetatable({}, {__index = BaseBridge}); do
         self.Callbacks = {}
         self.ClientId = nil
 
-        --// Send registration \\--
         self.WebSocket:Send(HttpService:JSONEncode(GetRegistrationInfo()))
 
         self.AliveThread = task.spawn(function()
             local consecutiveFailures = 0
             while task.wait(1) do
                 if not self.Connected then
+                    continue
+                end
+
+                if self.WebSocket then
+                    consecutiveFailures = 0
                     continue
                 end
 
@@ -192,11 +204,9 @@ local WebSocketBridge = setmetatable({}, {__index = BaseBridge}); do
             end)
         end)
     
-        --// On Message \\--
         self.WebSocket.OnMessage:Connect(function(message)
             local data = HttpService:JSONDecode(message)
 
-            --// Handle registration response \\--
             if data.type == "registered" then
                 self.ClientId = data.clientId
                 return
@@ -208,10 +218,15 @@ local WebSocketBridge = setmetatable({}, {__index = BaseBridge}); do
             end
         end)
     
-        --// On Close \\--
         self.WebSocket.OnClose:Connect(function()
             self.Connected = false
         end)
+    
+        if self.WebSocket.OnError then
+            self.WebSocket.OnError:Connect(function()
+                self.Connected = false
+            end)
+        end
     
         return self
     end
@@ -223,14 +238,12 @@ local WebSocketBridge = setmetatable({}, {__index = BaseBridge}); do
     end
 end
 
---// HTTP Polling Bridge \\--
 local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
     HTTPBridge.__index = HTTPBridge
     
     function HTTPBridge.new()
         local self = setmetatable({}, HTTPBridge)
     
-        --// Yield until the server is alive with exponential backoff \\--
         local retryDelay = 0.5
         local maxRetryDelay = 5
         local maxAttempts = 10
@@ -250,10 +263,9 @@ local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
         self.PollInterval = 0.1
         self.ClientId = nil
 
-        --// Register with the server \\--
         pcall(function()
             local regResponse = request({
-                Url = "http://" .. BridgeURL .. "/register",
+                Url = HTTP_SCHEME .. BridgeURL .. "/register",
                 Method = "POST",
                 Headers = { ["Content-Type"] = "application/json" },
                 Body = HttpService:JSONEncode(GetRegistrationInfo()),
@@ -264,14 +276,13 @@ local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
             end
         end)
     
-        --// Start polling thread \\--
         self.PollThread = task.spawn(function()
             local consecutiveFailures = 0
             
             while self.Connected do
                 local gotCommands = false
                 local success, _ = pcall(function()
-                    local pollUrl = "http://" .. BridgeURL .. "/poll"
+                    local pollUrl = HTTP_SCHEME .. BridgeURL .. "/poll"
                     if self.ClientId then
                         pollUrl = pollUrl .. "?clientId=" .. self.ClientId
                     end
@@ -280,7 +291,6 @@ local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
                         Method = "GET"
                     })
 
-                    --// Server might be down \\--
                     if response.StatusCode ~= 204 and response.StatusCode ~= 200 then
                         consecutiveFailures += 1
                         if consecutiveFailures >= 3 then
@@ -292,7 +302,6 @@ local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
                     
                     consecutiveFailures = 0
     
-                    --// Handle response \\--
                     if response.Body and response.Body ~= "" then
                         local data = HttpService:JSONDecode(response.Body)
                         local commands = {}
@@ -308,9 +317,8 @@ local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
                                 local result = self:HandleMessage(command)
                                 if result == nil then return end
 
-                                --// Send response back \\--
                                 request({
-                                    Url = "http://" .. BridgeURL .. "/respond",
+                                    Url = HTTP_SCHEME .. BridgeURL .. "/respond",
                                     Method = "POST",
                                     Headers = {
                                         ["Content-Type"] = "application/json"
@@ -345,7 +353,6 @@ local HTTPBridge = setmetatable({}, {__index = BaseBridge}); do
     end
 end
 
---// Create Bridge \\--
 local function CreateBridge()
     if WebSocketAvailable then
         local success, bridge = pcall(function()

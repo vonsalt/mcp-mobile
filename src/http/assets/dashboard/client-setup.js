@@ -1,6 +1,7 @@
 import {
     DEFAULT_BRIDGE_URL,
     buildLoaderSnippet,
+    buildMobileLoaderSnippet,
     normalizeBridgeUrl,
 } from './connector-snippet.mjs';
 
@@ -36,17 +37,25 @@ const SETUP_ICONS = {
     network: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-router-icon lucide-router"><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6.01 18H6"/><path d="M10.01 18H10"/><path d="M15 10v4"/><path d="M17.84 7.17a4 4 0 0 0-5.66 0"/><path d="M20.66 4.34a8 8 0 0 0-11.31 0"/></svg>',
     tailscale: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-lock-icon lucide-globe-lock"><path d="M15.686 15A14.5 14.5 0 0 1 12 22a14.5 14.5 0 0 1 0-20 10 10 0 1 0 9.542 13"/><path d="M2 12h8.5"/><path d="M20 6V4a2 2 0 1 0-4 0v2"/><rect width="8" height="5" x="14" y="6" rx="1"/></svg>',
     roblox: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="5" width="14" height="14" rx="2" transform="rotate(12 12 12)"/><rect x="10" y="10" width="4" height="4" rx="1"/></svg>',
+    mobile: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/></svg>',
     mcp: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3 4 7l8 4 8-4-8-4Z"/><path d="m4 12 8 4 8-4"/><path d="m4 17 8 4 8-4"/></svg>',
     chevron: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>',
 };
 
 const ADD_CLIENT_TARGETS = {
     roblox: {
-        title: 'Roblox client',
-        shortTitle: 'Roblox',
+        title: 'Roblox (desktop)',
+        shortTitle: 'Desktop',
         codeTitle: 'Roblox connector',
         action: 'Paste this in Roblox. It connects the game client only.',
-        description: 'Runs the Luau connector in Roblox. This does not relay host-side MCP tools.',
+        description: 'Runs the Luau connector in Roblox. Best when Roblox is on the same machine or LAN.',
+    },
+    mobile: {
+        title: 'Mobile / Delta',
+        shortTitle: 'Mobile',
+        codeTitle: 'Mobile connector',
+        action: 'Paste this into Delta (Android/iOS). Fetches the script from GitHub — no LAN access required for the initial load.',
+        description: 'Uses a GitHub URL instead of the local server. Works with Delta on Android and iOS. Set BridgeURL to your server\'s LAN IP or tunnel address.',
     },
     mcp: {
         title: 'MCP relay',
@@ -147,12 +156,13 @@ async function refreshClientSetupData() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load setup options');
     clientSetupData = data;
+    updateMobileLoadstringStrip(data);
     return data;
 }
 
 function openAddClientModal(initialTarget = 'roblox') {
     addClientMode = initialTarget === 'harness' ? 'harness' : 'choices';
-    addClientTarget = initialTarget === 'mcp' ? 'mcp' : 'roblox';
+    addClientTarget = initialTarget === 'mcp' ? 'mcp' : (initialTarget === 'mobile' ? 'mobile' : 'roblox');
     addClientGuideOpen = false;
     addClientAdminPrompt = null;
     addClientOutput = '';
@@ -243,6 +253,7 @@ function renderAddClientIntro() {
         renderSafetyWarning() +
         '<div class="add-client-intent-grid">' +
         renderTargetChoice('roblox', SETUP_ICONS.roblox) +
+        renderTargetChoice('mobile', SETUP_ICONS.mobile) +
         renderTargetChoice('mcp', SETUP_ICONS.mcp) +
         '</div>' +
         '<div class="add-client-subactions">' +
@@ -381,7 +392,8 @@ function renderSkipBridgeButton() {
 
 function renderTargetSwitch() {
     return '<div class="add-client-target-tabs" role="group" aria-label="Connector type">' +
-        '<button class="add-client-target-tab' + (addClientTarget === 'roblox' ? ' active' : '') + '" data-action="set-target" data-target="roblox">Roblox</button>' +
+        '<button class="add-client-target-tab' + (addClientTarget === 'roblox' ? ' active' : '') + '" data-action="set-target" data-target="roblox">Desktop</button>' +
+        '<button class="add-client-target-tab' + (addClientTarget === 'mobile' ? ' active' : '') + '" data-action="set-target" data-target="mobile">Mobile</button>' +
         '<button class="add-client-target-tab' + (addClientTarget === 'mcp' ? ' active' : '') + '" data-action="set-target" data-target="mcp">MCP relay</button>' +
         '</div>';
 }
@@ -432,9 +444,14 @@ function renderBridgeInput(mode, fallback, label, compact) {
 
 function renderConnectorCode(connector) {
     const target = getTargetCopy();
-    const code = addClientTarget === 'mcp'
-        ? buildDashboardMcpRelaySnippet(connector.bridgeUrl)
-        : connector.loaderSnippet;
+    let code;
+    if (addClientTarget === 'mcp') {
+        code = buildDashboardMcpRelaySnippet(connector.bridgeUrl);
+    } else if (addClientTarget === 'mobile') {
+        code = buildMobileLoaderSnippet(connector.bridgeUrl);
+    } else {
+        code = connector.loaderSnippet;
+    }
     const copyCode = addClientTarget === 'mcp'
         ? buildDashboardMcpRelayCopySnippet(connector.bridgeUrl)
         : code;
@@ -888,5 +905,36 @@ if (addClientBody) {
     });
 }
 
-return { open: openAddClientModal, close: closeAddClientModal };
+// Mobile quick-copy strip
+const mobileLoadstringStrip = $('mobileLoadstringStrip');
+const mobileLoadstringCode = $('mobileLoadstringCode');
+const mobileLoadstringCopy = $('mobileLoadstringCopy');
+
+function buildCloudMobileSnippet(publicUrl) {
+    const base = publicUrl.replace(/\/$/, '');
+    return `getgenv().BridgeURL = "${base}"\n-- getgenv().MCP_AUTH_TOKEN = "your_token"\nloadstring(game:HttpGet("${base}/mobile-connector.luau"))()`;
+}
+
+function updateMobileLoadstringStrip(data) {
+    if (!mobileLoadstringStrip || !mobileLoadstringCode) return;
+    const publicUrl = data?.publicUrl;
+    const snippet = publicUrl
+        ? buildCloudMobileSnippet(publicUrl)
+        : buildMobileLoaderSnippet(data?.connectors?.currentMachine?.bridgeUrl || undefined);
+    mobileLoadstringCode.textContent = snippet;
+    mobileLoadstringStrip.hidden = false;
+}
+
+if (mobileLoadstringCopy && mobileLoadstringCode) {
+    mobileLoadstringCopy.addEventListener('click', () => {
+        const text = mobileLoadstringCode.textContent || '';
+        navigator.clipboard.writeText(text).then(() => {
+            const prev = mobileLoadstringCopy.innerHTML;
+            mobileLoadstringCopy.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+            setTimeout(() => { mobileLoadstringCopy.innerHTML = prev; }, 1800);
+        }).catch(() => showToast('Copy failed', 'error'));
+    });
+}
+
+return { open: openAddClientModal, close: closeAddClientModal, updateMobileLoadstringStrip };
 }
