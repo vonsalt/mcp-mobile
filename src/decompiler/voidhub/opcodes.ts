@@ -144,6 +144,7 @@ const AUX_OPCODES: readonly string[] = [
 /** Opcodes whose signed D/E operand is a jump offset in instruction words. */
 const JUMP_OPCODES: readonly string[] = [
     "JUMP",
+    "JUMPX",
     "JUMPIF",
     "JUMPIFNOT",
     "JUMPIFEQ",
@@ -197,6 +198,26 @@ export interface DecodedInstruction {
     c: number;
     d: number;
     e: number;
+}
+
+/**
+ * Jump offset in instruction words. Every jump opcode encodes its offset in
+ * the signed 16-bit D operand (bits 16-31) except JUMPX, which encodes it in
+ * the signed 24-bit E operand (bits 8-23). Single source of truth for the
+ * whole pipeline.
+ */
+export function jumpOffset(instruction: DecodedInstruction): number {
+    return instruction.opName === "JUMPX" ? instruction.e : instruction.d;
+}
+
+/**
+ * Absolute instruction index (word offset) a jump lands on, or undefined
+ * when the instruction is not a jump.
+ */
+export function jumpTargetPc(instruction: DecodedInstruction): number | undefined {
+    if (!IS_JUMP.has(instruction.opName))
+        return undefined;
+    return instruction.index + 1 + jumpOffset(instruction);
 }
 
 /** Decode a flat array of instruction words into records with operands. */

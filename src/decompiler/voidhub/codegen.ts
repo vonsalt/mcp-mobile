@@ -55,7 +55,7 @@ function renderStatements(statements: Statement[], depth: number): string[] {
                 out.push(`${pad}until ${statement.condition}`);
                 break;
             case "numericFor":
-                out.push(`${pad}for r${statement.register} = ${statement.from}, ${statement.to}${statement.step !== "r?" ? `, ${statement.step}` : ""} do`);
+                out.push(`${pad}for r${statement.register} = ${statement.from}, ${statement.to}, ${statement.step} do`);
                 out.push(...renderStatements(statement.body, depth + 1));
                 out.push(`${pad}end`);
                 break;

@@ -7,7 +7,7 @@
  * pipeline when later stages cannot recover structure.
  */
 
-import { decodeInstructions, IS_JUMP, type DecodedInstruction } from "./opcodes.js";
+import { decodeInstructions, jumpTargetPc, type DecodedInstruction } from "./opcodes.js";
 import type { LuauChunk, LuauConstant, LuauProto } from "./lbc.js";
 
 export interface DisasmLine {
@@ -52,28 +52,6 @@ function register(prefix: string, index: number): string {
     return `${prefix}${index}`;
 }
 
-const D_OPERAND_JUMPS = new Set([
-    "JUMP",
-    "JUMPBACK",
-    "JUMPX",
-    "FORNPREP",
-    "FORNLOOP",
-    "FORGPREP",
-    "FORGLOOP",
-    "FORGPREP_INEXT",
-    "FORGPREP_NEXT",
-    "CMPPROTO",
-]);
-
-function jumpTarget(instruction: DecodedInstruction): number | undefined {
-    if (!IS_JUMP.has(instruction.opName))
-        return undefined;
-    const operand = D_OPERAND_JUMPS.has(instruction.opName)
-        ? instruction.d
-        : instruction.e;
-    return instruction.index + 1 + operand;
-}
-
 function renderInstruction(chunk: LuauChunk, proto: LuauProto, instruction: DecodedInstruction): string {
     const k = proto.constants;
     const a = instruction.a;
@@ -92,7 +70,8 @@ function renderInstruction(chunk: LuauChunk, proto: LuauProto, instruction: Deco
         case "LOADB":
             return `r${a} = ${b !== 0 ? "true" : "false"}`;
         case "LOADN":
-            return `r${a} = ${c < 128 ? c : c - 256}`;
+            // LOADN carries a signed 16-bit value in D (bits 16-31).
+            return `r${a} = ${d}`;
         case "LOADK":
             return `r${a} = ${formatConstant(k[b])}`;
         case "LOADKX":
@@ -120,11 +99,13 @@ function renderInstruction(chunk: LuauChunk, proto: LuauProto, instruction: Deco
         case "SETTABLEKS":
             return `r${b}[${formatConstant(k[aux ?? 0])}] = r${a}`;
         case "GETTABLEN":
-            return `r${a} = r${b}[${c < 128 ? c : c - 256}]`;
+            // GETTABLEN carries an unsigned 8-bit table index in C.
+            return `r${a} = r${b}[${c}]`;
         case "SETTABLEN":
-            return `r${b}[${c < 128 ? c : c - 256}] = r${a}`;
+            // SETTABLEN carries an unsigned 8-bit table index in C.
+            return `r${b}[${c}] = r${a}`;
         case "NEWCLOSURE":
-            return `r${a} = closure(${b}, [${Array.from({ length: instruction.word >>> 8 & 0xff ? 0 : 0 }, () => "").join("")}${aux !== undefined ? aux : ""}...)`;
+            return `r${a} = closure(${b})`;
         case "NAMECALL":
             return `r${a + 1} = r${b}:${formatConstant(k[aux ?? 0])}(...)`;
         case "CALL": {
@@ -139,33 +120,33 @@ function renderInstruction(chunk: LuauChunk, proto: LuauProto, instruction: Deco
             return `return ${count < 0 ? "..." : count === 0 ? "nothing" : `r${a}, … (${count} values)`}`;
         }
         case "JUMP":
-            return `goto ${jumpTarget(instruction)}`;
+            return `goto ${jumpTargetPc(instruction)}`;
         case "JUMPBACK":
-            return `goto ${jumpTarget(instruction)}`;
+            return `goto ${jumpTargetPc(instruction)}`;
         case "JUMPIF":
-            return `if r${a} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPIFNOT":
-            return `if not r${a} then goto ${jumpTarget(instruction)}`;
+            return `if not r${a} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPIFEQ":
-            return `if r${a} == r${d} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} == r${aux ?? 0} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPIFLE":
-            return `if r${a} <= r${d} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} <= r${aux ?? 0} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPIFLT":
-            return `if r${a} < r${d} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} < r${aux ?? 0} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPIFNOTEQ":
-            return `if r${a} ~= r${d} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} ~= r${aux ?? 0} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPIFNOTLE":
-            return `if r${a} > r${d} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} > r${aux ?? 0} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPIFNOTLT":
-            return `if r${a} >= r${d} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} >= r${aux ?? 0} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPXEQKNIL":
-            return `if r${a} == nil then goto ${jumpTarget(instruction)}`;
+            return `if r${a} == nil then goto ${jumpTargetPc(instruction)}`;
         case "JUMPXEQKB":
-            return `if r${a} == ${aux !== 0 ? "true" : "false"} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} == ${aux !== 0 ? "true" : "false"} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPXEQKN":
-            return `if r${a} == ${formatConstant(k[aux ?? 0])} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} == ${formatConstant(k[aux ?? 0])} then goto ${jumpTargetPc(instruction)}`;
         case "JUMPXEQKS":
-            return `if r${a} == ${formatConstant(k[aux ?? 0])} then goto ${jumpTarget(instruction)}`;
+            return `if r${a} == ${formatConstant(k[aux ?? 0])} then goto ${jumpTargetPc(instruction)}`;
         case "ADD":
             return `r${a} = r${b} + r${c}`;
         case "SUB":
@@ -213,15 +194,15 @@ function renderInstruction(chunk: LuauChunk, proto: LuauProto, instruction: Deco
         case "SETLIST":
             return `r${b}:set_list(r${b + 1}, ${aux ?? 0})`;
         case "FORNPREP":
-            return `for r${a} = r${a + 1}, r${a + 2}, r${a + 3} do -- prep, goto ${jumpTarget(instruction)}`;
+            return `for r${a} = r${a + 1}, r${a + 2}, r${a + 3} do -- prep, goto ${jumpTargetPc(instruction)}`;
         case "FORNLOOP":
-            return `end -- numeric for loop step, goto ${jumpTarget(instruction)}`;
+            return `end -- numeric for loop step, goto ${jumpTargetPc(instruction)}`;
         case "FORGLOOP":
-            return `end -- generic for loop step (state ${aux ?? 0}), goto ${jumpTarget(instruction)}`;
+            return `end -- generic for loop step (state ${aux ?? 0}), goto ${jumpTargetPc(instruction)}`;
         case "FORGPREP":
         case "FORGPREP_INEXT":
         case "FORGPREP_NEXT":
-            return `for r${a + 3}, r${a + 4}, r${a + 5} in r${a} do -- prep, goto ${jumpTarget(instruction)}`;
+            return `for r${a + 3}, r${a + 4}, r${a + 5} in r${a} do -- prep, goto ${jumpTargetPc(instruction)}`;
         case "FASTCALL":
         case "FASTCALL1":
         case "FASTCALL2":
@@ -237,7 +218,8 @@ function renderInstruction(chunk: LuauChunk, proto: LuauProto, instruction: Deco
         case "PREPVARARGS":
             return `adjust_varargs(${a})`;
         case "JUMPX":
-            return `goto ${d}`;
+            // JUMPX encodes its target in the E operand (bits 8-23).
+            return `goto ${jumpTargetPc(instruction)}`;
         case "COVERAGE":
             return `coverage(${aux ?? 0})`;
         case "CAPTURE":
@@ -261,7 +243,7 @@ function renderInstruction(chunk: LuauChunk, proto: LuauProto, instruction: Deco
         case "CALLFB":
             return `r${a} = call_feedback r${a}(..., ${aux ?? 0})`;
         case "CMPPROTO":
-            return `compare_proto(${aux ?? 0}) goto ${jumpTarget(instruction)}`;
+            return `compare_proto(${aux ?? 0}) goto ${jumpTargetPc(instruction)}`;
         case "FASTPCALL":
             return `fast_pcall(${aux ?? 0})`;
         case "NEWCLASS":
@@ -296,7 +278,7 @@ export function disassembleProto(chunk: LuauChunk, proto: LuauProto): ProtoDisas
     const header = `function ${name}(${params}${vararg}) -- ${proto.code.length} words, ${proto.maxStackSize} stack, ${proto.constants.length} constants`;
 
     const lines: DisasmLine[] = instructions.map((instruction) => {
-        const target = jumpTarget(instruction);
+        const target = jumpTargetPc(instruction);
         const rendered = renderInstruction(chunk, proto, instruction);
         return {
             pc: instruction.index,

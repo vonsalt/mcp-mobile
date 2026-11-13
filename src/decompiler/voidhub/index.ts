@@ -12,4 +12,4 @@ export { buildControlFlowGraph, findLoopHeaders } from "./cfg.js";
 export { structureProto } from "./structurer.js";
 export { generateSource } from "./codegen.js";
 export { runVoidhubPipeline, type VoidhubProfile, type VoidhubResult, type StageReport } from "./pipeline.js";
-export { OPCODE_NAMES, decodeInstructions } from "./opcodes.js";
+export { OPCODE_NAMES, decodeInstructions, jumpOffset, jumpTargetPc } from "./opcodes.js";

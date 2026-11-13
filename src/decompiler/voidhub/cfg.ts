@@ -6,7 +6,7 @@
  * recover loops and conditionals.
  */
 
-import { decodeInstructions, IS_BLOCK_TERMINATOR, IS_JUMP, IS_UNCONDITIONAL_JUMP, type DecodedInstruction } from "./opcodes.js";
+import { decodeInstructions, IS_BLOCK_TERMINATOR, IS_UNCONDITIONAL_JUMP, jumpTargetPc, type DecodedInstruction } from "./opcodes.js";
 import type { LuauProto } from "./lbc.js";
 
 export interface BasicBlock {
@@ -27,15 +27,6 @@ export interface ControlFlowGraph {
     blockAt: Map<number, number>;
 }
 
-function jumpTarget(instruction: DecodedInstruction): number | undefined {
-    if (!IS_JUMP.has(instruction.opName))
-        return undefined;
-    const operand = instruction.opName === "JUMP" || instruction.opName === "JUMPBACK"
-        ? instruction.d
-        : instruction.e;
-    return instruction.index + 1 + operand;
-}
-
 /**
  * Build the CFG for a proto. Instructions that are the target of a jump
  * start a new block; every block terminator ends one.
@@ -47,7 +38,7 @@ export function buildControlFlowGraph(proto: LuauProto): ControlFlowGraph {
         leaders.add(0);
 
     for (const instruction of instructions) {
-        const target = jumpTarget(instruction);
+        const target = jumpTargetPc(instruction);
         if (target !== undefined) {
             if (target >= 0 && target < proto.code.length)
                 leaders.add(target);
@@ -95,7 +86,7 @@ export function buildControlFlowGraph(proto: LuauProto): ControlFlowGraph {
         if (!last)
             continue;
         const lastIndex = last.index + (last.aux !== undefined ? 2 : 1);
-        const target = jumpTarget(last);
+        const target = jumpTargetPc(last);
         if (target !== undefined && blockAt.has(target)) {
             connect(block.id, blockAt.get(target)!);
             // Conditional jumps also fall through.

@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { runVoidhubPipeline } from "../dist/decompiler/voidhub/pipeline.js";
 import { parseLuauBytecode } from "../dist/decompiler/voidhub/lbc.js";
+import { buildControlFlowGraph, findLoopHeaders } from "../dist/decompiler/voidhub/cfg.js";
 import { decodeInstructions, OPCODE_NAMES } from "../dist/decompiler/voidhub/opcodes.js";
 
 function varint(value) {
@@ -155,4 +156,135 @@ test("structured profile reports a clean failure on garbage input", () => {
     const result = runVoidhubPipeline(garbage, "structured");
     assert.equal(result.ok, false);
     assert.ok(result.error);
+});
+
+test("LOADN renders its signed 16-bit D operand", () => {
+    // LOADN r0, 1000 used to render "r0 = 3" (the C byte) instead of the
+    // signed 16-bit D value.
+    const bytecode = buildChunk({
+        code: [
+            word(4, 0, 1000),   // 0: LOADN r0, 1000
+            word(4, 1, -5),     // 1: LOADN r1, -5
+            word(22, 0, 0),     // 2: RETURN
+        ],
+    });
+    const result = runVoidhubPipeline(bytecode, "disasm");
+    assert.equal(result.ok, true, result.error);
+    assert.match(result.source, /r0 = 1000/);
+    assert.match(result.source, /r1 = -5/);
+});
+
+test("while-loop back edge yields a loop header and a while construct", () => {
+    // LOADB r0,1; JUMPIFNOT r0,-2 (back to pc 0); RETURN
+    const code = [
+        word(3, 0, 1),        // 0: LOADB r0, true
+        word(26, 0, -2),      // 1: JUMPIFNOT r0, -2 -> 0
+        word(22, 0, 0),       // 2: RETURN
+    ];
+    const bytecode = buildChunk({ code });
+    const chunk = parseLuauBytecode(bytecode);
+    const proto = chunk.protos[chunk.mainIndex];
+
+    // CFG: the JUMPIFNOT must produce a back edge to pc 0.
+    const cfg = buildControlFlowGraph(proto);
+    const jumpBlock = cfg.blocks.find((block) => block.instructions.some((i) => i.opName === "JUMPIFNOT"));
+    assert.ok(jumpBlock, "JUMPIFNOT block should exist");
+    const backEdgeTarget = jumpBlock.successors.map((id) => cfg.blocks[id].start)
+        .find((start) => start <= jumpBlock.start);
+    assert.notEqual(backEdgeTarget, undefined, "JUMPIFNOT should create a back edge");
+    const headers = findLoopHeaders(cfg);
+    assert.equal(headers.size, 1, "exactly one loop header expected");
+    const headerBlock = jumpBlock.successors.map((id) => cfg.blocks[id])
+        .find((block) => block.start <= jumpBlock.start);
+    assert.ok(headers.has(headerBlock.id), "back-edge target must be the loop header");
+
+    // Structured profile recovers a while construct with the D-based target.
+    const structured = runVoidhubPipeline(bytecode, "structured");
+    assert.equal(structured.ok, true, structured.error);
+    assert.match(structured.source, /while r0 do/);
+    assert.ok(structured.structuredRatio > 0, "structured ratio should be positive");
+
+    // Disasm annotation must use D (target 0), never a bogus negative target.
+    const disasm = runVoidhubPipeline(bytecode, "disasm");
+    assert.equal(disasm.ok, true, disasm.error);
+    assert.match(disasm.source, /if not r0 then goto 0/);
+    assert.doesNotMatch(disasm.source, /goto -\d+/);
+});
+
+test("numeric for loop produces a loop header via the FORNLOOP back edge", () => {
+    const code = [
+        word(56, 1, 1),       // 0: FORNPREP r1 -> 2
+        word(39, 0, 0),      // 1: ADDK r0, r0, K0 (body)
+        word(57, 1, -2),      // 2: FORNLOOP r1 -> 1
+        word(22, 0, 0),       // 3: RETURN
+    ];
+    const bytecode = buildChunk({ code, constants: [numericConstant(1)] });
+    const chunk = parseLuauBytecode(bytecode);
+    const cfg = buildControlFlowGraph(chunk.protos[chunk.mainIndex]);
+    const headers = findLoopHeaders(cfg);
+    assert.equal(headers.size, 1, "FORNLOOP back edge should mark the body block as loop header");
+});
+
+test("JUMPIF target annotations use the D operand", () => {
+    const code = [
+        word(25, 0, 2),       // 0: JUMPIF r0, +2 -> 3
+        word(3, 1, 1),        // 1: LOADB r1, true
+        word(22, 0, 0),       // 2: RETURN
+        word(22, 0, 0),       // 3: RETURN
+    ];
+    const bytecode = buildChunk({ code });
+    const disasm = runVoidhubPipeline(bytecode, "disasm");
+    assert.equal(disasm.ok, true, disasm.error);
+    assert.match(disasm.source, /if r0 then goto 3/);
+    assert.doesNotMatch(disasm.source, /goto -\d+/);
+    const balanced = runVoidhubPipeline(bytecode, "balanced");
+    assert.equal(balanced.ok, true, balanced.error);
+    assert.match(balanced.source, /JUMPIF -> 3/);
+});
+
+test("JUMPIFEQ renders the second register from the AUX word", () => {
+    // A = r1, D = jump offset, AUX = r2.
+    const code = [
+        word(27, 1, 1),       // 0: JUMPIFEQ r1, r2, D=+1 -> 2
+        2,                    //    AUX word: register 2
+        word(22, 0, 0),       // 2: RETURN
+    ];
+    const bytecode = buildChunk({ code });
+    const disasm = runVoidhubPipeline(bytecode, "disasm");
+    assert.equal(disasm.ok, true, disasm.error);
+    assert.match(disasm.source, /if r1 == r2 then goto 2/);
+    const structured = runVoidhubPipeline(bytecode, "structured");
+    assert.equal(structured.ok, true, structured.error);
+    assert.match(structured.source, /r1 == r2/);
+});
+
+test("JUMPX decodes its target from the E operand", () => {
+    // JUMPX (opcode 67) encodes its offset in the signed 24-bit E operand
+    // (bits 8-23), unlike every other jump which uses D.
+    const jumpxWord = ((OPCODE_NAMES.indexOf("JUMPX")) | (2 << 8)) >>> 0; // E = +2 -> pc 3
+    const code = [
+        jumpxWord,            // 0: JUMPX +2 -> 3
+        word(3, 1, 1),        // 1: LOADB r1, true (skipped)
+        word(22, 0, 0),       // 2: RETURN (skipped)
+        word(22, 0, 0),       // 3: RETURN
+    ];
+    const bytecode = buildChunk({ code });
+    const chunk = parseLuauBytecode(bytecode);
+    const proto = chunk.protos[chunk.mainIndex];
+
+    // CFG: the JUMPX block must have exactly one edge to the block at pc 3
+    // (unconditional, so no fallthrough to pc 1).
+    const cfg = buildControlFlowGraph(proto);
+    const jumpxBlock = cfg.blocks.find((block) => block.instructions.some((i) => i.opName === "JUMPX"));
+    assert.ok(jumpxBlock, "JUMPX block should exist");
+    assert.equal(jumpxBlock.successors.length, 1, "JUMPX is unconditional: single successor");
+    assert.equal(cfg.blocks[jumpxBlock.successors[0]].start, 3, "JUMPX must jump to pc 3 via E");
+
+    const disasm = runVoidhubPipeline(bytecode, "disasm");
+    assert.equal(disasm.ok, true, disasm.error);
+    assert.match(disasm.source, /goto 3/);
+    assert.doesNotMatch(disasm.source, /goto -\d+/);
+    const balanced = runVoidhubPipeline(bytecode, "balanced");
+    assert.equal(balanced.ok, true, balanced.error);
+    assert.match(balanced.source, /JUMPX -> 3/);
 });

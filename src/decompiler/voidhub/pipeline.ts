@@ -19,7 +19,7 @@ import { disassembleChunk } from "./disasm.js";
 import { buildControlFlowGraph, findLoopHeaders } from "./cfg.js";
 import { structureProto, type StructuredProto, type Statement } from "./structurer.js";
 import { generateSource } from "./codegen.js";
-import { decodeInstructions } from "./opcodes.js";
+import { decodeInstructions, jumpTargetPc } from "./opcodes.js";
 
 export type VoidhubProfile = "disasm" | "balanced" | "structured";
 
@@ -79,11 +79,9 @@ function renderBalanced(chunk: LuauChunk): string {
         for (const block of cfg.blocks) {
             lines.push(`    ::block_${block.id}::`);
             for (const instruction of block.instructions) {
-                const target = instruction.opName.startsWith("JUMPIF") || instruction.opName.startsWith("JUMP")
-                    ? `${instruction.index + 1 + instruction.e}`
-                    : undefined;
+                const target = jumpTargetPc(instruction);
                 lines.push(
-                    target !== undefined && target !== ""
+                    target !== undefined
                         ? `    -- pc${instruction.index}: ${instruction.opName} -> ${target}`
                         : `    -- pc${instruction.index}: ${instruction.opName}`,
                 );
