@@ -48,7 +48,6 @@ while true do
         require("./handlers/scripts"),
         require("./handlers/instances"),
         require("./handlers/remote-spy/logs"),
-        require("./handlers/remote-spy/control"),
         require("./handlers/input"),
         require("./handlers/screenshot"),
         require("./handlers/game-state"),

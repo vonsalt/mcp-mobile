@@ -240,15 +240,11 @@ export async function POST(req: IncomingMessage, res: ServerResponse): Promise<v
             "get-console-output": "get-console-output",
             "get-descendants-tree": "get-descendants-tree",
             "get-game-info": "get-game-info",
-            "remote-spy": "remote-spy",
         };
         const robloxType = dispatchTypes[type];
         if (!robloxType)
             return jsonErr(res, `Unknown tool type: ${type}`);
         const data: Record<string, unknown> = {};
-        if (type === "remote-spy") {
-            Object.assign(data, params);
-        }
         if (type === "get-data-by-code") {
             const code = params.code as string;
             if (!code)

@@ -29,7 +29,7 @@ const SERVER_OPTIONS = {
         "12. Use get-data-by-code only for small, targeted value probes — prefer the specialized inspection tools above, and have the returned code return compact values, never whole instances or large tables.",
         "13. After execute / execute-file, verify effects with a small get-console-output (low limit) or a targeted get-data-by-code probe.",
         "14. Keep tool outputs lean: prefer summaryOnly, filters, and low limits; only raise maxOutputChars when a single result truly needs it. Large/raw outputs degrade reasoning quality.",
-        "15. For remote spying, use remote-spy with operation=list first. Start with summaryOnly=true and a low limit; narrow by name before requesting call arguments. If Cobalt is not available, the tool falls back to basic remote inventory mode.",
+        "15. For remote spying, use remote-spy with a short duration (10-30s) and an optional nameFilter to narrow the capture. After the duration elapses, call get-console-output and look for '[MCP-SPY] Results' — that line has the paste-void URL with all captured remote calls.",
         "16. For mobile clients, call get-client-capabilities to check which tools are supported on the connected executor.",
         "17. When writing Luau code for execute/get-data-by-code, always use pcall() for any Roblox API call that may fail, and return compact results (not full instances). Use setthreadidentity(8) at the start of code that needs elevated permissions.",
         "18. When writing automation scripts, follow the observed game flow exactly: fire the same remotes in the same order, interact with the same UI elements, and verify each step before proceeding. Add waits (task.wait) between steps to let the server respond.",
