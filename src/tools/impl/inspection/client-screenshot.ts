@@ -65,6 +65,66 @@ function parseCaptureErrorFromResult(result: { isError?: boolean; content?: unkn
     }
 }
 
+const IMAGE_FETCH_TIMEOUT_MS = 15000;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Download a hosted screenshot with a hard timeout and size cap so a slow or
+ * oversized (or maliciously unbounded) image URL cannot hang or exhaust the
+ * server. Content-Length is checked up front and streamed bytes are counted
+ * as a fallback when the header is missing or lies.
+ */
+async function fetchImageWithLimits(url: string): Promise<{ ok: true; base64: string } | { ok: false; error: string }> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
+    const tooLarge = () => `screenshot exceeds the ${Math.round(MAX_IMAGE_BYTES / (1024 * 1024))}MB size limit`;
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok)
+            return { ok: false, error: `image host returned HTTP ${response.status}` };
+        const contentLength = Number(response.headers.get("content-length") || "0");
+        if (contentLength > MAX_IMAGE_BYTES)
+            return { ok: false, error: tooLarge() };
+        const chunks: Buffer[] = [];
+        if (response.body) {
+            const reader = response.body.getReader();
+            let received = 0;
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done)
+                    break;
+                if (!value)
+                    continue;
+                received += value.byteLength;
+                if (received > MAX_IMAGE_BYTES) {
+                    void reader.cancel().catch(() => {});
+                    return { ok: false, error: tooLarge() };
+                }
+                chunks.push(Buffer.from(value));
+            }
+        }
+        else {
+            const buffer = Buffer.from(await response.arrayBuffer());
+            if (buffer.byteLength > MAX_IMAGE_BYTES)
+                return { ok: false, error: tooLarge() };
+            chunks.push(buffer);
+        }
+        return { ok: true, base64: Buffer.concat(chunks).toString("base64") };
+    }
+    catch (error) {
+        const aborted = error instanceof Error && error.name === "AbortError";
+        return {
+            ok: false,
+            error: aborted
+                ? `screenshot download timed out after ${IMAGE_FETCH_TIMEOUT_MS / 1000}s`
+                : `screenshot download failed: ${error instanceof Error ? error.message : String(error)}`,
+        };
+    }
+    finally {
+        clearTimeout(timer);
+    }
+}
+
 /** Upload a base64 image to paste-void; returns the hosted URL. */
 async function exportImageToPasteVoid(base64: string, mimeType: string): Promise<{ ok: boolean; url?: string; error?: string }> {
     const controller = new AbortController();
@@ -108,6 +168,8 @@ export default function register(server: McpServer): void {
                 .default(1280),
             quality: z
                 .number()
+                .min(20)
+                .max(100)
                 .describe("JPEG/PNG quality percentage (default: 80, range 20-100).")
                 .optional()
                 .default(80),
@@ -169,10 +231,9 @@ export default function register(server: McpServer): void {
             try {
                 const payload = JSON.parse(text) as { imageUrl?: string; mimeType?: string; success?: boolean; error?: string };
                 if (payload.imageUrl) {
-                    const imgRes = await fetch(payload.imageUrl);
-                    if (imgRes.ok) {
-                        const buf = await imgRes.arrayBuffer();
-                        const b64 = Buffer.from(buf).toString("base64");
+                    const fetched = await fetchImageWithLimits(payload.imageUrl);
+                    if (fetched.ok) {
+                        const b64 = fetched.base64;
                         const mime = payload.mimeType ?? "image/png";
                         if (exportToPasteVoid) {
                             const upload = await exportImageToPasteVoid(b64, mime);
@@ -193,7 +254,7 @@ export default function register(server: McpServer): void {
                     }
                     // URL fetch failed — return the URL as text so Claude at least has it
                     return {
-                        content: [{ type: "text", text: `Screenshot URL: ${payload.imageUrl}` }],
+                        content: [{ type: "text", text: `Screenshot URL: ${payload.imageUrl} (${fetched.error})` }],
                     };
                 }
             } catch {

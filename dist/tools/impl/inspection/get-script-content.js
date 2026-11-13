@@ -76,6 +76,7 @@ export default function register(server) {
                 ...(startLine !== undefined ? { startLine } : {}),
                 ...(endLine !== undefined ? { endLine } : {}),
                 maxLines,
+                exportToPasteVoid,
                 maxOutputChars,
             }, 60000, {
                 maxOutputChars,

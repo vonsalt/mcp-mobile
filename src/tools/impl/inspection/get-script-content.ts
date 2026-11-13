@@ -77,6 +77,7 @@ export default function register(server: McpServer): void {
                 ...(startLine !== undefined ? { startLine } : {}),
                 ...(endLine !== undefined ? { endLine } : {}),
                 maxLines,
+                exportToPasteVoid,
                 maxOutputChars,
             }, 60000, {
                 maxOutputChars,

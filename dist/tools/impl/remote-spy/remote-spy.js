@@ -1,24 +1,29 @@
 import { z } from "zod";
 import { sendFireAndForget, toolTextResponse } from "../../factory.js";
-const PASTE_API = "https://paste-void.lovable.app/api/paste";
-async function uploadToPaste(content, title) {
-    const res = await fetch(PASTE_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, language: "lua", title }),
-    });
-    if (!res.ok)
-        throw new Error(`paste upload failed: ${res.status}`);
-    const json = await res.json();
-    return json.rawUrl;
+import { PASTE_VOID_TEXT_ENDPOINT, exportTextToPasteVoid } from "../../../shared/paste-void.js";
+const MAX_CAPTURED_LOGS = 500;
+/**
+ * Escape a value for interpolation into a double-quoted Lua string literal.
+ * Backslash must be escaped first, then the quote delimiter and the control
+ * characters that would otherwise break out of the literal. JSON.stringify is
+ * NOT safe here — it can emit \uXXXX escapes that Lua does not understand.
+ */
+function escapeLuaDoubleQuotedString(value) {
+    return value
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r")
+        .replace(/\t/g, "\\t");
 }
 function buildCaptureScript(duration, nameFilter) {
-    const filter = nameFilter ? nameFilter.replace(/'/g, "\\'") : "";
+    const filter = nameFilter ? escapeLuaDoubleQuotedString(nameFilter) : "";
     return `
 setthreadidentity(8)
 local logs = {}
 local startTime = os.clock()
 local DURATION = ${duration}
+local MAX_LOGS = ${MAX_CAPTURED_LOGS}
 local NAME_FILTER = ${nameFilter ? `"${filter}"` : "nil"}
 
 local function escStr(s)
@@ -60,7 +65,7 @@ mt.__namecall = newcclosure(function(self, ...)
     if method == "FireServer" or method == "InvokeServer" or method == "FireAllClients" or method == "FireClient" then
         local name = tostring(self.Name or self)
         local match = not NAME_FILTER or name:lower():find(NAME_FILTER:lower(), 1, true)
-        if match and #logs < 500 then
+        if match and #logs < MAX_LOGS then
             table.insert(logs, {
                 name = name,
                 method = method,
@@ -94,7 +99,7 @@ task.delay(DURATION, function()
     local jsonBody = '[' .. table.concat(entries, ',') .. ']'
 
     local uploadOk, result = pcall(request, {
-        Url = "${PASTE_API}",
+        Url = "${PASTE_VOID_TEXT_ENDPOINT}",
         Method = "POST",
         Headers = { ["Content-Type"] = "application/json" },
         Body = '{"content":' .. serialize(jsonBody) .. ',"language":"json","title":"remote-spy-capture"}'
@@ -128,9 +133,12 @@ export default function register(server) {
         inputSchema: z.object({
             duration: z
                 .number()
+                .int()
+                .min(1)
+                .max(600)
                 .optional()
                 .default(10)
-                .describe("Seconds to capture remote calls (default: 10)"),
+                .describe("Seconds to capture remote calls (default: 10, range 1-600)"),
             nameFilter: z
                 .string()
                 .optional()
@@ -138,13 +146,12 @@ export default function register(server) {
         }),
     }, async ({ duration, nameFilter }) => {
         const script = buildCaptureScript(duration, nameFilter);
-        let rawUrl;
-        try {
-            rawUrl = await uploadToPaste(script, "mcp-remote-spy");
+        const upload = await exportTextToPasteVoid(script, "mcp-remote-spy", "lua");
+        if (!upload.ok || !upload.url) {
+            return toolTextResponse(`Failed to upload capture script to paste-void: ${upload.error ?? "no raw URL in response"}. ` +
+                "The remote spy was not injected — check paste-void availability and retry.", {}, true);
         }
-        catch (err) {
-            return toolTextResponse(`Failed to upload capture script to paste-void: ${err}`, {}, true);
-        }
+        const rawUrl = upload.url;
         const loadstringSource = `setthreadidentity(8)\nloadstring(game:HttpGet("${rawUrl}"))()`;
         return sendFireAndForget({
             type: "execute",

@@ -18,8 +18,17 @@ export interface PasteVoidResult {
 const PASTE_TIMEOUT_MS = 15000;
 const MAX_PASTE_CHARS = 2_000_000;
 
-/** Upload a text paste and return its raw URL. */
-export async function exportTextToPasteVoid(content: string, title?: string): Promise<PasteVoidResult> {
+/**
+ * Upload a text paste and return its raw URL.
+ *
+ * `language` is optional syntax highlighting metadata for the paste
+ * (e.g. "lua", "json"); omitting it keeps the historical request shape.
+ */
+export async function exportTextToPasteVoid(
+    content: string,
+    title?: string,
+    language?: string,
+): Promise<PasteVoidResult> {
     if (!content.trim())
         return { ok: false, error: "Refusing to paste empty content." };
     if (content.length > MAX_PASTE_CHARS)
@@ -31,7 +40,7 @@ export async function exportTextToPasteVoid(content: string, title?: string): Pr
         const response = await fetch(PASTE_VOID_TEXT_ENDPOINT, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content, ...(title ? { title } : {}) }),
+            body: JSON.stringify({ content, ...(title ? { title } : {}), ...(language ? { language } : {}) }),
             signal: controller.signal,
         });
         const body = await response.text();
